@@ -1,0 +1,9 @@
+# Alcune estensioni comune per file oggetto, librerie e eseguibili
+*.o
+*.out
+*.a
+*.lib
+*.so
+
+# Direcory delle build
+/build/
