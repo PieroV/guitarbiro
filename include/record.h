@@ -19,11 +19,17 @@
  *  2 - an error occurred while choosing/opening the device
  *  -1 - the function had already been called
  */
-int audioInit();
+extern int audioInit();
 
 /**
  * @brief Start recording.
+ *
+ * For this test code, it will acquire some samples from the selected device
+ * and it will save them to the file that is passed as argument.
+ *
+ * @param outFileName The name of the file to save audio to
+ * @return The status (boolean)
  */
-void audioRecord();
+extern int audioRecord(const char *outFileName);
 
 #endif /* __RECORD_H */

@@ -19,6 +19,7 @@
 int main(int argc, char *argv[])
 {
 	audioInit();
+	audioRecord("/dev/shm/prova");
 
 	return 0;
 }
