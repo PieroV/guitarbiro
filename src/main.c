@@ -7,7 +7,7 @@
  */
 
 /// All audio related functions
-#include "record.h"
+#include "audio.h"
 
 /**
  * @brief The entry point of the program
@@ -18,8 +18,14 @@
  */
 int main(int argc, char *argv[])
 {
-	audioInit();
-	audioRecord("/dev/shm/prova");
+	AudioContext audio;
+
+	if(audioInit(&audio)) {
+		audioClose(&audio);
+		return 1;
+	}
+	audioRecord(&audio, "/dev/shm/prova");
+	audioClose(&audio);
 
 	return 0;
 }

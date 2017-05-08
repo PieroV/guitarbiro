@@ -6,5 +6,5 @@ project (Progetto)
 include_directories(include)
 add_subdirectory(src)
 
-add_executable(Progetto src/main.c src/record.c)
+add_executable(Progetto src/main.c src/audio_init.c src/audio_record.c)
 target_link_libraries(Progetto soundio)
