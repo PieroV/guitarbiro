@@ -18,15 +18,16 @@
 /// assert
 #include <assert.h>
 
-/// sleep
-#include <unistd.h>
-
-/**
- *
- */
-struct RecordContext {
-    struct SoundIoRingBuffer *ring_buffer;
-};
+#ifdef WIN32
+	/// Sleep
+#	include <windows.h>
+#elif _POSIX_C_SOURCE >= 199309L
+	/// nanosleep
+#	include <time.h>
+#else
+	/// usleep
+#	include <unistd.h>
+#endif
 
 /**
  * @brief The sample rates we accept from the sound card.
@@ -61,13 +62,58 @@ static const enum SoundIoFormat FORMATS[] = {
 	SoundIoFormatInvalid,
 };
 
+/**
+ * @brief How much space allocate for the temporary buffer, measured in seconds.
+ */
+static const int RING_BUFFER_DURATION = 30;
+
+/**
+ * @brief The sleep time (in ms) between two executions of the acquiring loop.
+ */
+static const int ACQUISITION_SLEEP = 100;
+
+ /**
+  * @brief Struct to exchange data with recording function.
+  *
+  * LibSoundIo requires a callback function to save data from its buffer to some
+  * other memory area. This callback can handle a user parameter, and we use an
+  * instance of this struct as parameter.
+  *
+  * We use it to pass our output buffer and a variable which allows the control
+  * of the input acquisition cycle and the error reporting.
+  */
+ typedef struct {
+ 	/**
+ 	 * @brief The buffer to save samples to.
+ 	 *
+ 	 * Instead of using a normal buffer, we use a circular buffer, as advised in
+ 	 * libSoundIo documentation.
+ 	 */
+ 	struct SoundIoRingBuffer *ringBuffer;
+
+ 	/**
+ 	 * @brief A status variable that is used to report errors.
+ 	 *
+ 	 * This variable can assume these values:
+ 	 *  0: no errors;
+ 	 *  1: ring buffer overflow;
+ 	 *  2: begin read error;
+ 	 *  3: end read error.
+ 	 *
+ 	 * When status is not 0, the audioRecord loop stops.
+ 	 */
+ 	int status;
+ } RecordContext;
+
 static struct SoundIoInStream *createStream(struct SoundIoDevice *device);
 static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
 		int frameCountMax);
+static void sleepMs(unsigned int ms);
 
-int audioRecord(AudioContext *context, const char *outFileName)
+int audioRecord(AudioContext *context, const char *keepRunning,
+		const char *outFileName)
 {
-	// An integer used to get errors
+	/// An integer used to get errors and report false status when returning
 	int err = 0;
 
 	if(!context->device) {
@@ -80,59 +126,76 @@ int audioRecord(AudioContext *context, const char *outFileName)
 		return 0;
 	}
 
-	struct SoundIoInStream *instream = createStream(context->device);
-	if(!instream) {
+	/// The input stream from the device
+	struct SoundIoInStream *inStream = createStream(context->device);
+	if(!inStream) {
 		return 0;
 	}
 
-	printf("%dHz %s interleaved\n", instream->sample_rate,
-			soundio_format_string(instream->format));
+	printf("%dHz %s interleaved\n", inStream->sample_rate,
+			soundio_format_string(inStream->format));
 
-	if(err = soundio_instream_open(instream)) {
+	if(err = soundio_instream_open(inStream)) {
 		fprintf(stderr, "Could not open input stream: %s.\n",
 				soundio_strerror(err));
 		return 0;
 	}
 
-	const int ring_buffer_duration_seconds = 30;
-	int capacity = ring_buffer_duration_seconds * instream->sample_rate * instream->bytes_per_frame;
+	int capacity = RING_BUFFER_DURATION * inStream->sample_rate *
+			inStream->bytes_per_frame;
 
 	/// A struct to exchange data with the recording callback
-	struct RecordContext rc;
-	rc.ring_buffer = soundio_ring_buffer_create(context->soundio, capacity);
-	if(!rc.ring_buffer) {
+	RecordContext rc;
+	inStream->userdata = &rc;
+
+	rc.ringBuffer = soundio_ring_buffer_create(context->soundio, capacity);
+	if(!rc.ringBuffer) {
 		fprintf(stderr, "Could not create the ring buffer.\n");
 		return 0;
 	}
-	instream->userdata = &rc;
 
-	if((err = soundio_instream_start(instream))) {
-		fprintf(stderr, "Could not start input device: %s.\n", soundio_strerror(err));
-		return 0;
+	rc.status = 0;
+
+	if((err = soundio_instream_start(inStream))) {
+		fprintf(stderr, "Could not start input device: %s.\n",
+				soundio_strerror(err));
 	}
 
-	/* TODO: Add a strategy to finish recording!
-	This is just to test if libSoundIo works and it requires to stop it using
-	CTRL+C, and therefore lose up to 1 second of recorded audio data. */
-	while(1) {
-		soundio_flush_events(context->soundio);
-		sleep(1);
+	/* keepRunning must be evaluated as true before recording.
+	A 0 value for keepRunning is considered as a logic error and therefore
+	it is reported with an assertion in debugging time. */
+	assert(*keepRunning);
 
-	 	int fill_bytes = soundio_ring_buffer_fill_count(rc.ring_buffer);
-		char *read_buf = soundio_ring_buffer_read_ptr(rc.ring_buffer);
+	/* Check err because if error has already occurred the cycle is skipped and
+	cleaning code is immediately run instead.
+	TODO: Even though the cycle exits gracefully, sample loss is still a
+	problem! As a metter of fact keepRunning is evaluated without checking if
+	there are still samples to read. */
+	while(*keepRunning && !rc.status && !err) {
+		soundio_flush_events(context->soundio);
+		sleepMs(ACQUISITION_SLEEP);
+
+	 	int fill_bytes = soundio_ring_buffer_fill_count(rc.ringBuffer);
+		char *read_buf = soundio_ring_buffer_read_ptr(rc.ringBuffer);
 
 		size_t amt = fwrite(read_buf, 1, fill_bytes, out_f);
 		if ((int)amt != fill_bytes) {
 			fprintf(stderr, "Write error: %s.\n", strerror(errno));
-			return 0;
+
+			/* Return 0 instead of 1, but don't return immediately because we
+			still need to execute cleaning section. */
+			err = 1;
+			break;
 		}
 
-		soundio_ring_buffer_advance_read_ptr(rc.ring_buffer, fill_bytes);
+		soundio_ring_buffer_advance_read_ptr(rc.ringBuffer, fill_bytes);
 	}
 
-	soundio_instream_destroy(instream);
+	// Cleaning section
+	soundio_ring_buffer_destroy(rc.ringBuffer);
+	soundio_instream_destroy(inStream);
 
-	return 1;
+	return err == 0;
 }
 
 /**
@@ -150,49 +213,49 @@ static struct SoundIoInStream *createStream(struct SoundIoDevice *device)
 	}
 
 	/// The stream that will be returned.
-	struct SoundIoInStream *instream = soundio_instream_create(device);
+	struct SoundIoInStream *inStream = soundio_instream_create(device);
 
-	if(!instream) {
+	if(!inStream) {
 		fprintf(stderr, "Could not create the instream.\n");
 		return 0;
 	}
 
-	instream->read_callback = readCallback;
+	inStream->read_callback = readCallback;
 
 	if(!device->sample_rate_count) {
 		fprintf(stderr, "The device doesn't have any sample rate.");
 		return 0;
 	}
 
-	instream->sample_rate = SAMPLE_RATES[0];
+	inStream->sample_rate = SAMPLE_RATES[0];
 	for(int const *i = SAMPLE_RATES; *i &&
 			!soundio_device_supports_sample_rate(device, *i); i++) {
-		instream->sample_rate = *i;
+		inStream->sample_rate = *i;
 	}
 
-	if(!instream->sample_rate) {
+	if(!inStream->sample_rate) {
 		// TODO: Check if that is correct
 		/* There isn't any of our preferred frequency, take the nearest.
 		Another simpler way would be using the max frequency, but this could
 		lead to a failure, because the max rate could be too high and require
 		too much memory. This happens, for example, with PulseAudio. */
-		instream->sample_rate = device->sample_rates[0].max;
+		inStream->sample_rate = device->sample_rates[0].max;
 	}
 
 	/* Our implementation probabily will support only float data, in any case
 	checking support formats is a good idea. */
-	instream->format = FORMATS[0];
+	inStream->format = FORMATS[0];
 	for(enum SoundIoFormat const *i = FORMATS; *i != SoundIoFormatInvalid &&
 			!soundio_device_supports_format(device, *i); i++) {
-		instream->format = *i;
+		inStream->format = *i;
 	}
 
-	if(instream->format == SoundIoFormatInvalid) {
+	if(inStream->format == SoundIoFormatInvalid) {
 		fprintf(stderr, "The sound card doesn't support the required input format.");
 		return 0;
 	}
 
-	return instream;
+	return inStream;
 }
 
 /**
@@ -205,27 +268,34 @@ static struct SoundIoInStream *createStream(struct SoundIoDevice *device)
  *
  * See the official documentation of LibSoundIo for further information.
  *
- * @param instream The input stream to read from
+ * @param inStream The input stream to read from
  * @param frameCountMin The minimum frame to read not to lose them
  * @param frameCountMax The maximum frame that the function can read
  */
-static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
+static void readCallback(struct SoundIoInStream *inStream, int frameCountMin,
 		int frameCountMax)
 {
-	struct RecordContext *rc = instream->userdata;
-	struct SoundIoChannelArea *areas;
-	int err;
+	RecordContext *rc = inStream->userdata;
 
-	char *writePtr = soundio_ring_buffer_write_ptr(rc->ring_buffer);
-	int freeBytes = soundio_ring_buffer_free_count(rc->ring_buffer);
-
-	int freeCount = freeBytes / instream->bytes_per_frame;
-	if(freeCount < frameCountMin) {
-		// TODO: Add a nicer way to exit
-		fprintf(stderr, "ring buffer overflow\n");
-		exit(1);
+	/* This should never happen, however if the status is not clean, continuing
+	the execution is not a good idea, so return immediately. */
+	if(rc->status) {
+		return;
 	}
 
+	// These variables are needed by libSoundIo
+	struct SoundIoChannelArea *areas;
+	int err;
+	char *writePtr = soundio_ring_buffer_write_ptr(rc->ringBuffer);
+
+	int freeBytes = soundio_ring_buffer_free_count(rc->ringBuffer);
+	int freeCount = freeBytes / inStream->bytes_per_frame;
+	if(freeCount < frameCountMin) {
+		fprintf(stderr, "Ring buffer overflow\n");
+
+		rc->status = 1;
+		return;
+	}
 	int writeFrames = freeCount < frameCountMax ? freeCount : frameCountMax;
 
 	/* An assertion here isn't really needed, because the code still works, but
@@ -236,10 +306,11 @@ static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
 
 	for(int frameCount = writeFrames, framesLeft = writeFrames;
 			framesLeft > 0; framesLeft -= frameCount) {
-		if(err = soundio_instream_begin_read(instream, &areas, &frameCount)) {
-			// TODO: Set a flag to stop reading in audioRecord instead of exiting
-			fprintf(stderr, "begin read error: %s", soundio_strerror(err));
-			exit(1);
+		if(err = soundio_instream_begin_read(inStream, &areas, &frameCount)) {
+			fprintf(stderr, "Begin read error: %s", soundio_strerror(err));
+
+			rc->status = 2;
+			return;
 		}
 
 		/* Note: frameCount is used as output parameter in previous function.
@@ -254,24 +325,49 @@ static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
 			Note: a silence is ok for registration, but for audio detection
 			could not be very useful. A flag to report silence and so clear the
 			state of the played note would be better. */
-			memset(writePtr, 0, frameCount * instream->bytes_per_frame);
+			memset(writePtr, 0, frameCount * inStream->bytes_per_frame);
 		} else {
 			for(int frame = 0; frame < frameCount; frame++) {
-				for(int ch = 0; ch < instream->layout.channel_count; ch++) {
-					memcpy(writePtr, areas[ch].ptr, instream->bytes_per_sample);
+				for(int ch = 0; ch < inStream->layout.channel_count; ch++) {
+					memcpy(writePtr, areas[ch].ptr, inStream->bytes_per_sample);
 					areas[ch].ptr += areas[ch].step;
-					writePtr += instream->bytes_per_sample;
+					writePtr += inStream->bytes_per_sample;
 				}
 			}
 		}
 
 		// TODO: Set a flag to stop reading in audioRecord instead of exiting
-		if(err = soundio_instream_end_read(instream)) {
-			fprintf(stderr, "end read error: %s", soundio_strerror(err));
-			exit(1);
+		if(err = soundio_instream_end_read(inStream)) {
+			fprintf(stderr, "End read error: %s", soundio_strerror(err));
+
+			rc->status = 3;
+			return;
 		}
 	}
 
-	int advanceBytes = writeFrames * instream->bytes_per_frame;
-	soundio_ring_buffer_advance_write_ptr(rc->ring_buffer, advanceBytes);
+	int advanceBytes = writeFrames * inStream->bytes_per_frame;
+	soundio_ring_buffer_advance_write_ptr(rc->ringBuffer, advanceBytes);
+}
+
+/**
+ * @brief A sleep function with milliseconds precision.
+ * @author Bernardo Ramos (http://stackoverflow.com/users/4626775/bernardo-ramos)
+ * @link http://stackoverflow.com/a/28827188
+ * @copyright Creative Commons Attribution-ShareAlike 3.0 Unported
+ *
+ * This function has been taken from Stack Overflow.
+ *
+ * @param ms The milliseconds to sleep
+ */
+inline static void sleepMs(unsigned int ms) {
+#ifdef WIN32
+	Sleep(ms);
+#elif _POSIX_C_SOURCE >= 199309L
+	struct timespec ts;
+	ts.tv_sec = ms / 1000;
+	ts.tv_nsec = (ms % 1000) * 1000000;
+	nanosleep(&ts, NULL);
+#else
+	usleep(ms * 1000);
+#endif
 }

@@ -132,12 +132,15 @@ struct SoundIoDevice *getInputDevice(struct SoundIo *soundio)
 
 	/// A temporary integer that stores the device choice
 	int chosen;
-	// TODO: if the cli interface will be kept, clean the stdin buffer
+
 	scanf("%d", &chosen);
 	while(chosen < 1 || chosen > inputCount) {
 		printf("Invalid choice! Please choose the device again: ");
 		scanf("%d", &chosen);
 	}
+
+	int tmp;
+	while((tmp = getchar()) != '\n' && tmp != EOF);
 
 	/* Since we haven't flushed events, we assume the list hasn't changed
 	internally. Otherwise we should have saved pointers to the pointers of the

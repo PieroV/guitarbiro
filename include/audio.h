@@ -69,9 +69,18 @@ extern void audioClose(AudioContext *context);
  * For this test code, it will acquire some samples from the selected device
  * and it will save them to the file that is passed as argument.
  *
+ * Since we don't to provide a time or sample number based condition to stop the
+ * recording, we allow it to be controlled using an external flag.
+ * Due to its constant nature, it must not be 0 before the recording starts.
+ * Since this would be a logic error, it is controlled using an assertion.
+ * The flag has been chosen to be const to avoid any problem with
+ * synchronization.
+ *
  * @param outFileName The name of the file to save audio to
+ * @param keepRunning A flag that allows to control the audio recording
  * @return The status (boolean)
  */
-extern int audioRecord(AudioContext *context, const char *outFileName);
+extern int audioRecord(AudioContext *context, const char *keepRunning,
+		const char *outFileName);
 
 #endif /* __AUDIO_H */
