@@ -1,5 +1,5 @@
 /**
- * @file record.c
+ * @file audio_record.c
  * @brief Manages the acquisition of samples from the audio card.
  *
  * @link http://libsound.io/doc-1.1.0/sio_list_devices_8c-example.html
@@ -21,12 +21,14 @@
 #ifdef WIN32
 	/// Sleep
 #	include <windows.h>
-#elif _POSIX_C_SOURCE >= 199309L
+#elif defined(__linux__)
+	/// usleep (on Linux)
+#	include <unistd.h>
+#endif
+
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
 	/// nanosleep
 #	include <time.h>
-#else
-	/// usleep
-#	include <unistd.h>
 #endif
 
 /**
@@ -336,7 +338,6 @@ static void readCallback(struct SoundIoInStream *inStream, int frameCountMin,
 			}
 		}
 
-		// TODO: Set a flag to stop reading in audioRecord instead of exiting
 		if(err = soundio_instream_end_read(inStream)) {
 			fprintf(stderr, "End read error: %s", soundio_strerror(err));
 
@@ -362,12 +363,14 @@ static void readCallback(struct SoundIoInStream *inStream, int frameCountMin,
 inline static void sleepMs(unsigned int ms) {
 #ifdef WIN32
 	Sleep(ms);
-#elif _POSIX_C_SOURCE >= 199309L
+#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
 	struct timespec ts;
 	ts.tv_sec = ms / 1000;
 	ts.tv_nsec = (ms % 1000) * 1000000;
 	nanosleep(&ts, NULL);
-#else
+#elif defined(__linux__)
 	usleep(ms * 1000);
+#else
+#	error "Unsupported platform"
 #endif
 }

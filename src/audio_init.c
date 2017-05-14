@@ -1,4 +1,5 @@
 /**
+ * @file audio_init.c
  * @brief Manages the initialization of audio system.
  */
 

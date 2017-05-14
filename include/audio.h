@@ -1,5 +1,5 @@
 /**
- * @file record.h
+ * @file audio.h
  * @brief Manages the acquisition of samples from the audio card.
  */
 
