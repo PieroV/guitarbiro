@@ -135,7 +135,7 @@ float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
 
 	*q = 0;
 
-	/* Size is maxP+2 (not maxP+1!) because we need up to element maxP + 1 to
+	/* Size is maxP + 2 (not maxP + 1) because we need up to element maxP + 1 to
 	check whether element at maxP is a peak.
 	Thanks to Les Cargill for spotting the bug. */
 	if(!(nac = alloc(maxP + 2))) {

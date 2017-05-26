@@ -1,3 +1,8 @@
+/**
+ * @file check_period_estimator.c
+ * @brief Performs unit testing on estimatePeriod function
+ */
+
 /// The check unit framework
 #include <check.h>
 
@@ -10,24 +15,13 @@
 /// The library to test
 #include "period_estimator.h"
 
-#include <stdio.h>
-#include <assert.h>
+/// Macros to use check 0.10 with floating point numbers
+#include "check_float.h"
 
 /**
  * @brief The frequency of A0 in Hz.
  */
 static const float A0 = 27.5;
-
-#ifndef ck_assert_float_eq_tol
-/**
- * @brief Macro to use check 0.10 with foats, like check 0.11 does
- */
-#	define ck_assert_float_eq_tol(x, y, t) ck_assert(fabs((x) - (y)) < (t))
-#endif
-
-#ifndef ck_assert_float_neq
-#	define ck_assert_float_neq(x, y) ck_assert((x) != (y))
-#endif
 
 /**
  * @brief Compute a frequency starting from A0.
@@ -42,7 +36,7 @@ inline static float getFrequency(int semitones)
 }
 
 /**
- * @brief Simulate a test with a pure sine and with a sine plus octaves.
+ * @brief Simulate a test with a pure sine signal and with a sine plus octaves.
  *
  * The test will simulate the sampling rate of 44100.
  */
