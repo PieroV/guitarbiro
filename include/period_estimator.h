@@ -13,6 +13,10 @@
  * It also includes sub-sample accuracy of the period estimate, and avoidance of
  * octave errors.
  *
+ * @note This function uses periods. Frequencies and periods are bound by this
+ *  formula: f = Fs / T, being f the frequency, T the period and Fs the sampling
+ *  rate.
+ *
  * @author Gerry Beauregard <gerry.beauregard@gmail.com>
  * @link https://gerrybeauregard.wordpress.com/2013/07/15/high-accuracy-monophonic-pitch-estimation-using-normalized-autocorrelation/
  * @copyright MIT License
@@ -21,7 +25,9 @@
  * @param n The number of samples. It must be at least 2*maxP.
  * @param minP Minimum period of interest
  * @param Maximum period of interest
- * @param q Quality of the periodicity (1 = perfectly periodic)
+ * @param q Quality of the periodicity (1 = perfectly periodic). This parameter
+ *  cannot be null and must be correctly allocated
+ * @return The period of signal (in number of elements of x array)
  */
 float estimatePeriod(const float *x, int n, int minP, int maxP, float *q);
 

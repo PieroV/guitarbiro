@@ -46,5 +46,5 @@ endif(NOT HAVE_PID_T)
 add_executable(check_guitar check_guitar.c ../src/guitar.c)
 target_link_libraries(check_guitar m ${CHECK_LIBRARIES} Threads::Threads)
 
-add_executable(check_period_estimator check_period_estimator.c ../src/period_estimator.c)
+add_executable(check_period_estimator check_period_estimator.c ../src/period_estimator.c ../src/guitar.c)
 target_link_libraries(check_period_estimator m ${CHECK_LIBRARIES} Threads::Threads)

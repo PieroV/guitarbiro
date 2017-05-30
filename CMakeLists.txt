@@ -16,7 +16,7 @@ add_executable(Progetto src/main.c src/audio_init.c src/audio_record.c
 target_link_libraries(Progetto m soundio Threads::Threads)
 
 enable_testing()
-add_test(NAME check_period_estimator COMMAND check_period_estimator)
+add_test(NAME check_period_estimator COMMAND check_period_estimator resources)
 add_test(NAME check_guitar COMMAND check_guitar)
 
 file(COPY resources DESTINATION .)
