@@ -175,19 +175,33 @@ static double *alloc(size_t size)
 
 static void computeNac(const float *x, int n, int minP, int maxP, double *nac)
 {
+	/// Sum of squares of beginning part
+	double sumSqBeg = 0.0;
+	/**
+	 * @brief Sum of squares of ending part
+	 *
+	 * The initial value is needed because at first for iteration, it will
+	 * subtracted.
+	 * However minP - 2 is always a legal index because minP >= 2 (see asserts
+	 * on estimatePeriod).
+	 */
+	 double sumSqEnd = x[minP - 2] * x[minP - 2];
+
+	for(int i = 0, j = minP - 1; i < n - minP + 1; i++, j++) {
+		sumSqBeg += x[i] * x[i];
+		sumSqEnd += x[j] * x[j];
+	}
+
 	for(int p = minP - 1; p <= maxP + 1; p++) {
 		/// Standard auto-correlation
 		double ac = 0.0;
-		/// Sum of squares of beginning part
-		double sumSqBeg = 0.0;
-		/// Sum of squares of ending part
-		double sumSqEnd = 0.0;
 
 		for(int i = 0; i < n - p; i++) {
 			ac += x[i] * x[i + p];
-			sumSqBeg += x[i] * x[i];
-			sumSqEnd += x[i + p] * x[i + p];
 		}
+
+		sumSqBeg -= x[n - p] * x[n - p];
+		sumSqEnd -= x[p - 1] * x[p - 1];
 
 		if(sumSqBeg != 0 && sumSqEnd != 0) {
 			nac[p] = ac / sqrt(sumSqBeg * sumSqEnd);
