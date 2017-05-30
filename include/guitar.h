@@ -50,18 +50,18 @@ typedef short semitone_t;
  * This value is kept as a paramter so that the program can be adapted to other
  * instruments.
  */
-extern const unsigned int GUITAR_STRINGS;
+#define GUITAR_STRINGS 6
 
 /**
  * @brief The default number of frets in a standard guitar.
  */
-extern const unsigned int GUITAR_FRETS;
+#define GUITAR_FRETS 22
 
 /**
  * @brief Guitar standard tuning in semitones from A0.
  * @link https://en.wikipedia.org/wiki/Standard_tuning
  */
-extern const semitone_t STANDARD_TUNING[/*GUITAR_STRINGS*/];
+extern const semitone_t STANDARD_TUNING[GUITAR_STRINGS];
 
 /**
  * @brief Convert a note name to semitones relative to A0.
@@ -75,7 +75,7 @@ extern const semitone_t STANDARD_TUNING[/*GUITAR_STRINGS*/];
  * @return The semitones of the note from A0 or INVALID_SEMITONE in case of
  *  illegal arguments
  */
-semitone_t noteToSemitones(const char *name, semitone_t octave);
+extern semitone_t noteToSemitones(const char *name, semitone_t octave);
 
 /**
  * @brief Convert a note frequency to semitones relative to A0.
@@ -94,7 +94,7 @@ semitone_t noteToSemitones(const char *name, semitone_t octave);
  *  function
  * @return The semitones of the note from A0
  */
-semitone_t frequencyToSemitones(float frequency, float *error);
+extern semitone_t frequencyToSemitones(float frequency, float *error);
 
 /**
  * @brief Get all the frets in which a note can be played in a guitar.
@@ -116,7 +116,7 @@ semitone_t frequencyToSemitones(float frequency, float *error);
  * @param fretsNumber The number of frets of the guitar
  * @return The number of frets in which the note can be played
  */
-unsigned int noteToFrets(semitone_t note, const semitone_t *tuning,
+extern unsigned int noteToFrets(semitone_t note, const semitone_t *tuning,
 		semitone_t *frets, unsigned int strings, unsigned int fretsNumber);
 
 #endif /* __GUITAR_H */

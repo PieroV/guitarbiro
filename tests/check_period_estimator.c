@@ -49,8 +49,7 @@ START_TEST(testPeriodEstimatorSine)
 	 */
 	float f = getFrequency(48);
 
-	ck_assert_msg(fabs(f - 440.0f) < 1e-5, "Non è minore!");
-	//ck_assert_float_eq_tol(f, 440.0f, 1e-5);
+	ck_assert_float_eq_tol(f, 440.0f, 1e-5);
 
 	/// The sampling rate
 	const float fs = 44100;

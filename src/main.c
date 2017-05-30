@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 	}
 
 	if(!status) {
-		status = audioRecord(&audio, &run, "/dev/shm/prova") ? 3 : 0;
+		status = audioRecord(&audio, &run) ? 3 : 0;
 	}
 
 	pthread_join(waitThread, NULL);

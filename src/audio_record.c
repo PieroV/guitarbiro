@@ -11,10 +11,8 @@
 #include <stdio.h>
 /// malloc, free
 #include <stdlib.h>
-/// strerror, memset, memcpy
+/// memset, memcpy
 #include <string.h>
-/// errno
-#include <errno.h>
 /// assert
 #include <assert.h>
 
@@ -72,7 +70,7 @@ static const int RING_BUFFER_DURATION = 30;
 /**
  * @brief The sleep time (in ms) between two executions of the acquiring loop.
  */
-static const int ACQUISITION_SLEEP = 100;
+static const int ACQUISITION_SLEEP = 10;
 
  /**
   * @brief Struct to exchange data with recording function.
@@ -112,19 +110,12 @@ static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
 		int frameCountMax);
 static void sleepMs(unsigned int ms);
 
-int audioRecord(AudioContext *context, const char *keepRunning,
-		const char *outFileName)
+int audioRecord(AudioContext *context, const char *keepRunning)
 {
 	/// An integer used to get errors and report false status when returning
 	int err = 0;
 
 	if(!context->device) {
-		return 0;
-	}
-
-	FILE *out_f = fopen(outFileName, "wb");
-	if (!out_f) {
-		fprintf(stderr, "Could not open the destination file %s: %s.\n", outFileName, strerror(errno));
 		return 0;
 	}
 
@@ -177,20 +168,10 @@ int audioRecord(AudioContext *context, const char *keepRunning,
 		soundio_flush_events(context->soundio);
 		sleepMs(ACQUISITION_SLEEP);
 
-	 	int fill_bytes = soundio_ring_buffer_fill_count(rc.ringBuffer);
-		char *read_buf = soundio_ring_buffer_read_ptr(rc.ringBuffer);
-
-		size_t amt = fwrite(read_buf, 1, fill_bytes, out_f);
-		if ((int)amt != fill_bytes) {
-			fprintf(stderr, "Write error: %s.\n", strerror(errno));
-
-			/* Return 0 instead of 1, but don't return immediately because we
-			still need to execute cleaning section. */
-			err = 1;
-			break;
-		}
-
-		soundio_ring_buffer_advance_read_ptr(rc.ringBuffer, fill_bytes);
+		int fillBytes = soundio_ring_buffer_fill_count(rc.ringBuffer);
+		char *readBuf = soundio_ring_buffer_read_ptr(rc.ringBuffer);
+		// TODO Do something with this buffer
+		soundio_ring_buffer_advance_read_ptr(rc.ringBuffer, fillBytes);
 	}
 
 	// Cleaning section
@@ -224,6 +205,8 @@ static struct SoundIoInStream *createStream(struct SoundIoDevice *device)
 
 	inStream->read_callback = readCallback;
 
+	inStream->layout = *soundio_channel_layout_get_default(1);
+
 	if(!device->sample_rate_count) {
 		fprintf(stderr, "The device doesn't have any sample rate.");
 		return 0;
@@ -236,12 +219,8 @@ static struct SoundIoInStream *createStream(struct SoundIoDevice *device)
 	}
 
 	if(!inStream->sample_rate) {
-		// TODO: Check if that is correct
-		/* There isn't any of our preferred frequency, take the nearest.
-		Another simpler way would be using the max frequency, but this could
-		lead to a failure, because the max rate could be too high and require
-		too much memory. This happens, for example, with PulseAudio. */
-		inStream->sample_rate = device->sample_rates[0].max;
+		inStream->sample_rate = soundio_device_nearest_sample_rate(device,
+				SAMPLE_RATES[0]);
 	}
 
 	/* Our implementation probabily will support only float data, in any case

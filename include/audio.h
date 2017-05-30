@@ -80,7 +80,6 @@ extern void audioClose(AudioContext *context);
  * @param keepRunning A flag that allows to control the audio recording
  * @return The status (boolean)
  */
-extern int audioRecord(AudioContext *context, const char *keepRunning,
-		const char *outFileName);
+extern int audioRecord(AudioContext *context, const char *keepRunning);
 
 #endif /* __AUDIO_H */

@@ -10,11 +10,7 @@
 
 #include <stdio.h>
 
-const unsigned int GUITAR_STRINGS = 6;
-
-const unsigned int GUITAR_FRETS = 22;
-
-const semitone_t STANDARD_TUNING[/*GUITAR_STRINGS*/] = {
+const semitone_t STANDARD_TUNING[GUITAR_STRINGS] = {
    43,	// E4
    38,	// B3
    34,	// G3

@@ -149,8 +149,16 @@ struct SoundIoDevice *getInputDevice(struct SoundIo *soundio)
 	device = soundio_get_input_device(soundio, --chosen);
 
 	if(device->probe_error) {
-		printf("Unable to probe device: %s.\n",
+		fprintf(stderr, "Unable to probe device: %s.\n",
 				soundio_strerror(device->probe_error));
+		soundio_device_unref(device);
+		device = 0;
+	}
+
+	struct SoundIoChannelLayout const *mono =
+			soundio_channel_layout_get_default(1);
+	if(!soundio_device_supports_layout(device, mono)) {
+		fprintf(stderr, "The selected device does not support mono layout.\n");
 		soundio_device_unref(device);
 		device = 0;
 	}
