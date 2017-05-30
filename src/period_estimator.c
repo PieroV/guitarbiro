@@ -46,7 +46,7 @@
  * speed further callings, it's not deallocated.
  * It has to be freed by estimateFree.
  */
-static float *gNac = 0;
+static double *gNac = 0;
 
 /**
  * @brief The length of gNac (as number of elements, not as bytes).
@@ -60,7 +60,7 @@ static size_t gLength = 0;
  * @return The address of the buffer. Even though it's contained in the global
  *  variable gNac, we prefer to return it in case we remove the global variable.
  */
-static float *alloc(size_t size);
+static double *alloc(size_t size);
 
 /**
  * @brief Computes the normalized auto correlation.
@@ -76,7 +76,7 @@ static float *alloc(size_t size);
  * @param maxP The maximum period of interest
  * @param nac The array of the correlation
  */
-static void computeNac(const float *x, int n, int minP, int maxP, float *nac);
+static void computeNac(const float *x, int n, int minP, int maxP, double *nac);
 
 /**
  * @brief Find the peak of the auto correlation in the range of interest.
@@ -87,7 +87,7 @@ static void computeNac(const float *x, int n, int minP, int maxP, float *nac);
  * @param period The estimated period from interpolation
  * @return The index of the element with the maximum auto correlation
  */
-static int findPeak(const float *nac, int minP, int maxP, float *period);
+static int findPeak(const double *nac, int minP, int maxP, double *period);
 
 /**
  * @brief Check for and correct the octave errors.
@@ -109,9 +109,9 @@ static int findPeak(const float *nac, int minP, int maxP, float *period);
  * @param maxNac The index of the element that has maximum auto correlation
  * @return The (eventually) changed period
  */
-static float fixOctaves(const float *nac, int minP, float period, int maxNac);
+static double fixOctaves(const double *nac, int minP, double period, int maxNac);
 
-float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
+double estimatePeriod(const float *x, int n, int minP, int maxP, double *q)
 {
 	assert(minP > 1);
 	assert(maxP > minP);
@@ -120,7 +120,7 @@ float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
 	assert(q);
 
 	/// The period of the signal
-	float period = 0.0;
+	double period = 0.0;
 
 	/**
 	 * @brief The index of the element that has maximum auto-correlation.
@@ -131,7 +131,7 @@ float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
 	int maxNac;
 
 	/// The buffer to store normalized auto correlation into
-	float *nac;
+	double *nac;
 
 	*q = 0;
 
@@ -140,7 +140,7 @@ float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
 	Thanks to Les Cargill for spotting the bug. */
 	if(!(nac = alloc(maxP + 2))) {
 		fprintf(stderr, "Could not allocate the buffer for the autocorrelation.\n");
-		*q = -1.0f;
+		*q = -1.0;
 		return 0;
 	}
 
@@ -148,7 +148,7 @@ float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
 
 	maxNac = findPeak(nac, minP, maxP, &period);
 	if(maxNac == -1) {
-		return 0.0f;
+		return 0.0;
 	}
 
 	/* "Quality" of periodicity is the normalized autocorrelation at the best
@@ -160,33 +160,33 @@ float estimatePeriod(const float *x, int n, int minP, int maxP, float *q)
 	return period;
 }
 
-static float *alloc(size_t size)
+static double *alloc(size_t size)
 {
 	if(gNac == 0) {
-		gNac = (float *) malloc(size * sizeof(float));
+		gNac = (double *) malloc(size * sizeof(double));
 		gLength = size;
 	} else if(gLength < size) {
-		gNac = (float *) realloc(gNac, size * sizeof(float));
+		gNac = (double *) realloc(gNac, size * sizeof(double));
 		gLength = size;
 	}
 
 	return gNac;
 }
 
-static void computeNac(const float *x, int n, int minP, int maxP, float *nac)
+static void computeNac(const float *x, int n, int minP, int maxP, double *nac)
 {
 	for(int p = minP - 1; p <= maxP + 1; p++) {
 		/// Standard auto-correlation
-		float ac = 0.0;
+		double ac = 0.0;
 		/// Sum of squares of beginning part
-		float sumSqBeg = 0.0;
+		double sumSqBeg = 0.0;
 		/// Sum of squares of ending part
-		float sumSqEnd = 0.0;
+		double sumSqEnd = 0.0;
 
 		for(int i = 0; i < n - p; i++) {
 			ac += x[i] * x[i + p];
 			sumSqBeg += x[i] * x[i];
-			sumSqEnd += x[i+p] * x[i+p];
+			sumSqEnd += x[i + p] * x[i + p];
 		}
 
 		if(sumSqBeg != 0 && sumSqEnd != 0) {
@@ -197,7 +197,7 @@ static void computeNac(const float *x, int n, int minP, int maxP, float *nac)
 	}
 }
 
-static int findPeak(const float *nac, int minP, int maxP, float *period)
+static int findPeak(const double *nac, int minP, int maxP, double *period)
 {
 	/// The return value
 	int best = minP;
@@ -220,12 +220,12 @@ static int findPeak(const float *nac, int minP, int maxP, float *period)
 	if left  == right, real peak = mid;
 	if left  == mid,   real peak = mid - 0.5
 	if right == mid,   real peak = mid + 0.5 */
-	float mid   = nac[best];
-	float left  = nac[best - 1];
-	float right = nac[best + 1];
+	double mid   = nac[best];
+	double left  = nac[best - 1];
+	double right = nac[best + 1];
 
 	if(2 * mid - left - right != 0.0f) {
-		float shift = 0.5 * (right - left) / ( 2 * mid - left - right );
+		double shift = 0.5 * (right - left) / ( 2 * mid - left - right );
 		*period = best + shift;
 	} else {
 		// mid == (left + right) / 2 => no shift required
@@ -235,7 +235,7 @@ static int findPeak(const float *nac, int minP, int maxP, float *period)
 	return best;
 }
 
-static float fixOctaves(const float *nac, int minP, float period, int maxNac)
+static double fixOctaves(const double *nac, int minP, double period, int maxNac)
 {
 	/**
 	 * @brief Threshold to detect the real period.
@@ -243,7 +243,7 @@ static float fixOctaves(const float *nac, int minP, float period, int maxNac)
 	 * If strength at all submultiple of peak pos are this strong relative to
 	 * the peak, assume the submultiple is the real period.
 	 */
-	const float k_subMulThreshold = 0.90;
+	const double k_subMulThreshold = 0.90;
 
 	//  For each possible multiple error (starting with the biggest)
 	int maxMul = maxNac / minP;

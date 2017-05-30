@@ -29,7 +29,7 @@
  *  cannot be null and must be correctly allocated
  * @return The period of signal (in number of elements of x array)
  */
-float estimatePeriod(const float *x, int n, int minP, int maxP, float *q);
+double estimatePeriod(const float *x, int n, int minP, int maxP, double *q);
 
 /**
  * @brief Free the buffer used by estimatePeriod.

@@ -94,7 +94,7 @@ extern semitone_t noteToSemitones(const char *name, semitone_t octave);
  *  function
  * @return The semitones of the note from A0
  */
-extern semitone_t frequencyToSemitones(float frequency, float *error);
+extern semitone_t frequencyToSemitones(double frequency, double *error);
 
 /**
  * @brief Get all the frets in which a note can be played in a guitar.

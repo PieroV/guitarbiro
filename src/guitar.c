@@ -22,7 +22,7 @@ const semitone_t STANDARD_TUNING[GUITAR_STRINGS] = {
 /**
  * @brief The frequency of A0.
  */
-static const float A0 = 27.5f;
+static const double A0 = 27.5;
 
 /**
  * @brief Interval between notes in semitones.
@@ -72,7 +72,7 @@ semitone_t noteToSemitones(const char *name, semitone_t octave)
 	}
 }
 
-semitone_t frequencyToSemitones(float frequency, float *error)
+semitone_t frequencyToSemitones(double frequency, double *error)
 {
 	/* This if uses == instead of an epsilon check because actually logarithm
 	has problems only with the exact 0 value, whereas with very low values
@@ -84,7 +84,7 @@ semitone_t frequencyToSemitones(float frequency, float *error)
 	semitone_t ret = (semitone_t)roundf(log2f(frequency / A0) * 12);
 
 	if(error) {
-		*error = A0 * pow(2, (float)ret / 12.0) / frequency;
+		*error = A0 * pow(2, (double)ret / 12.0) / frequency;
 	}
 
 	return ret;

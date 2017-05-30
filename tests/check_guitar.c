@@ -22,22 +22,19 @@
 START_TEST(testGuitarSemitones)
 {
 	/// Note names
-	char *notes[] = {"C", "C#", "Db", "D", "D#", "Eb", "E",
-			"F", "F#", "Gb", "G", "G#", "Ab", "A", "A#",
-			"Bb", "B"};
+	char *notes[] = {"C", "C#", "Db", "D", "D#", "Eb", "E", "F",
+			"F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"};
 
 	/**
 	 * Hard-coded semitones values for notes of previous array at octave 0 from
 	 * A0.
 	 */
-	semitone_t semitones[] = {-9, -8, -8, -7, -6, -6, -5,
-			-4, -3, -3, -2, -1, -1, 0, 1,
-			1, 2};
+	semitone_t semitones[] = {-9, -8, -8, -7, -6, -6, -5, -4,
+			-3, -3, -2, -1, -1, 0, 1, 1, 2};
 
 	/// Hard-coded frequencies for notes of previous array at octave 0 in Hz
-	float freqs[] = {16.35f, 17.32f, 17.32f, 18.35f, 19.45f, 19.45f, 20.60,
-			21.83f, 23.12f, 23.12f, 24.50f, 25.96f, 25.96f, 27.50f, 29.14f,
-			29.14f, 30.87};
+	double freqs[] = {16.35, 17.32, 17.32, 18.35, 19.45, 19.45, 20.60, 21.83,
+			23.12, 23.12, 24.50, 25.96, 25.96, 27.50, 29.14, 29.14, 30.87};
 
 	/// The maximum octave to check
 	const semitone_t maxOctave = 10;
@@ -46,19 +43,19 @@ START_TEST(testGuitarSemitones)
 	 * The epsilon to accept the frequency error.
 	 * Since the values came with 2 significant figures, keep 0.01 as epsilon.
 	 */
-	const float epsilon = 1e-2f;
+	const double epsilon = 1e-2;
 
 	size_t len = sizeof(freqs) / sizeof(*freqs);
 
 	for(size_t i = 0; i < len; i++) {
 		for(semitone_t octave = 0; octave < maxOctave; octave++) {
 			semitone_t fromName = noteToSemitones(notes[i], octave);
-			float error;
+			double error;
 			semitone_t fromFrequency = frequencyToSemitones(freqs[i], &error);
 
 			ck_assert_int_eq(fromName, semitones[i]);
 			ck_assert_int_eq(fromFrequency, semitones[i]);
-			ck_assert_float_eq_tol(error, 1, epsilon);
+			ck_assert_double_eq_tol(error, 1, epsilon);
 
 			semitones[i] += 12;
 			freqs[i] *= 2;

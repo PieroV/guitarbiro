@@ -30,7 +30,7 @@
 /**
  * @brief The frequency of A0 in Hz.
  */
-static const float A0 = 27.5;
+static const double A0 = 27.5;
 
 /**
  * @brief The timeout to run the "real world samples" test.
@@ -59,7 +59,7 @@ static char *gPath;
  *  frequency of
  * @return The frequency
  */
-inline static float getFrequency(semitone_t semitones);
+inline static double getFrequency(semitone_t semitones);
 
 /**
  * @brief Open a sample file.
@@ -82,15 +82,15 @@ START_TEST(testPeriodEstimatorSine)
 	/**
 	 * @brief The base frequency for sine tests. In this case A4.
 	 */
-	float f = getFrequency(noteToSemitones("A", 4));
+	double f = getFrequency(noteToSemitones("A", 4));
 
-	ck_assert_float_eq_tol(f, 440.0f, 1e-5);
+	ck_assert_double_eq_tol(f, 440.0, 1e-5);
 
 	/// The sampling rate
-	const float fs = 44100;
+	const int fs = 44100;
 
 	/// The Pi
-	const float pi = 4 * atan(1);
+	const double pi = 4 * atan(1);
 
 	/// Lower bound for the frequency detection
 	int maxP = (int)floor(fs / A0);
@@ -118,7 +118,7 @@ START_TEST(testPeriodEstimatorSine)
 	float *y = malloc(len * sizeof(float));
 
 	/// The period of x, in number of elements of x
-	float p = fs / f;
+	double p = fs / f;
 
 	for(int i = 0; i < len; i++) {
 		x[i] = sin(2 * pi * i / p);
@@ -126,21 +126,21 @@ START_TEST(testPeriodEstimatorSine)
 				0.3 * sin(2 * pi * i * 3 / p);
 	}
 
-	float q;
-	float estimated = estimatePeriod(x, len, minP, maxP, &q);
+	double q;
+	double estimated = estimatePeriod(x, len, minP, maxP, &q);
 
-	ck_assert_float_neq(estimated, 0);
+	ck_assert_double_neq(estimated, 0);
 	estimated = fs / estimated;
 
 	// Allow 0.1% of error
-	ck_assert_float_eq_tol(estimated, f, 0.001);
-	ck_assert_float_eq_tol(q, 1, 0.05);
+	ck_assert_double_eq_tol(estimated, f, 0.001);
+	ck_assert_double_eq_tol(q, 1, 0.05);
 
 	estimated = estimatePeriod(y, len, minP, maxP, &q);
-	ck_assert_float_neq(estimated, 0);
+	ck_assert_double_neq(estimated, 0);
 	estimated = fs / estimated;
-	ck_assert_float_eq_tol(estimated, f, 0.001);
-	ck_assert_float_eq_tol(q, 1, 0.05);
+	ck_assert_double_eq_tol(estimated, f, 0.001);
+	ck_assert_double_eq_tol(q, 1, 0.05);
 }
 END_TEST
 
@@ -188,8 +188,8 @@ START_TEST(testPeriodEstimatorSamples)
 
 	for(int i = 0; strlen(samples[i]); i++) {
 		size_t size;
-		float freq;
-		float quality;
+		double freq;
+		double quality;
 
 		// openSample already checks for errors, so don't check again
 		float *buf = openSample(samples[i], &size);
@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 	return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
-inline static float getFrequency(semitone_t semitones)
+inline static double getFrequency(semitone_t semitones)
 {
 	return A0 * pow(2, semitones / 12.0f);
 }
