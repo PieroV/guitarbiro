@@ -33,7 +33,7 @@
 /// fprintf
 #include <stdio.h>
 
-/// sqrt
+/// sqrt, isnan
 #include <math.h>
 
 /// assert
@@ -244,6 +244,21 @@ static int findPeak(const double *nac, int minP, int maxP, double *period)
 	} else {
 		// mid == (left + right) / 2 => no shift required
 		*period = best;
+	}
+
+	/*
+	 * Some ill formed signals can contain NaN values.
+	 * This could happen, on guitar signals, when cables are defective and they
+	 * produce high power noises, or when mechanical switches (pickup selector,
+	 * volume potentiometer...) are used.
+	 *
+	 * During tests we encountered some situations of this kind, and a peak was
+	 * found correctly, but since the signal is corrupted, we prefer returning
+	 * an error.
+	 */
+	if(isnan(*period)) {
+		*period = 0.0;
+		return -1;
 	}
 
 	return best;

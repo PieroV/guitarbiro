@@ -72,19 +72,30 @@ semitone_t noteToSemitones(const char *name, semitone_t octave)
 	}
 }
 
+double noteToFrequency(const char *name, semitone_t octave)
+{
+	semitone_t semitones = noteToSemitones(name, octave);
+
+	if(semitones == INVALID_SEMITONE) {
+		return -1.0;
+	}
+
+	return A0 * pow(2, semitones / 12.0);
+}
+
 semitone_t frequencyToSemitones(double frequency, double *error)
 {
-	/* This if uses == instead of an epsilon check because actually logarithm
+	/* This if uses <= instead of an epsilon check because actually logarithm
 	has problems only with the exact 0 value, whereas with very low values
 	(less than 10^-30) still returns acceptable values. */
-	if(frequency == 0.0f) {
+	if(frequency <= 0.0) {
 		return INVALID_SEMITONE;
 	}
 
-	semitone_t ret = (semitone_t)roundf(log2f(frequency / A0) * 12);
+	semitone_t ret = (semitone_t)round(log2f(frequency / A0) * 12);
 
 	if(error) {
-		*error = A0 * pow(2, (double)ret / 12.0) / frequency;
+		*error = A0 * pow(2, ret / 12.0) / frequency;
 	}
 
 	return ret;

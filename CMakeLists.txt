@@ -12,7 +12,7 @@ add_subdirectory(src)
 add_subdirectory(tests)
 
 add_executable(Progetto src/main.c src/audio_init.c src/audio_record.c
-		src/guitar.c src/period_estimator.c)
+		src/detect.c src/guitar.c src/period_estimator.c)
 target_link_libraries(Progetto m soundio Threads::Threads)
 
 enable_testing()

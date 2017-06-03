@@ -17,6 +17,10 @@
 #	define ck_assert_float_neq(x, y) ck_assert((x) != (y))
 #endif
 
+#ifndef ck_assert_double_eq
+#	define ck_assert_double_eq(x, y) ck_assert((x) == (y))
+#endif
+
 #ifndef ck_assert_double_eq_tol
 #	define ck_assert_double_eq_tol(x, y, t) ck_assert(fabs((x) - (y)) < (t))
 #endif
