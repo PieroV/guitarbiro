@@ -51,6 +51,11 @@ extern void detectFree(DetectContext *context);
 
 /**
  * @brief Analyze some audio samples and outputs the played note to the user.
+ * @note This function assumes that at most one note is palyed per call, so, to
+ *  get more accurate results, call it often.
+ * @note When data aren't enough to get estimate the frequency, the function
+ *  simply doesn't advance the buffer read pointer, so that it can use these
+ *  data in further calls, therefore please pass always the same ring buffer.
  *
  * @param context A valid DetectContext instance
  * @param buffer The audio buffer

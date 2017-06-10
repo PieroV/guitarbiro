@@ -72,40 +72,40 @@ static const int RING_BUFFER_DURATION = 30;
 /**
  * @brief The sleep time (in ms) between two executions of the acquiring loop.
  */
-static const int ACQUISITION_SLEEP = 10;
+static const int ACQUISITION_SLEEP = 50;
 
- /**
-  * @brief Struct to exchange data with recording function.
-  *
-  * LibSoundIo requires a callback function to save data from its buffer to some
-  * other memory area. This callback can handle a user parameter, and we use an
-  * instance of this struct as parameter.
-  *
-  * We use it to pass our output buffer and a variable which allows the control
-  * of the input acquisition cycle and the error reporting.
-  */
- typedef struct {
- 	/**
- 	 * @brief The buffer to save samples to.
- 	 *
- 	 * Instead of using a normal buffer, we use a circular buffer, as advised in
- 	 * libSoundIo documentation.
- 	 */
- 	struct SoundIoRingBuffer *ringBuffer;
+/**
+ * @brief Struct to exchange data with recording function.
+ *
+ * LibSoundIo requires a callback function to save data from its buffer to some
+ * other memory area. This callback can handle a user parameter, and we use an
+ * instance of this struct as parameter.
+ *
+ * We use it to pass our output buffer and a variable which allows the control
+ * of the input acquisition cycle and the error reporting.
+ */
+typedef struct {
+	/**
+	 * @brief The buffer to save samples to.
+	 *
+	 * Instead of using a normal buffer, we use a circular buffer, as advised in
+	 * libSoundIo documentation.
+	 */
+	struct SoundIoRingBuffer *ringBuffer;
 
- 	/**
- 	 * @brief A status variable that is used to report errors.
- 	 *
- 	 * This variable can assume these values:
- 	 *  0: no errors;
- 	 *  1: ring buffer overflow;
- 	 *  2: begin read error;
- 	 *  3: end read error.
- 	 *
- 	 * When status is not 0, the audioRecord loop stops.
- 	 */
- 	int status;
- } RecordContext;
+	/**
+	 * @brief A status variable that is used to report errors.
+	 *
+	 * This variable can assume these values:
+	 *  0: no errors;
+	 *  1: ring buffer overflow;
+	 *  2: begin read error;
+	 *  3: end read error.
+	 *
+	 * When status is not 0, the audioRecord loop stops.
+	 */
+	int status;
+} RecordContext;
 
 static struct SoundIoInStream *createStream(struct SoundIoDevice *device);
 static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
@@ -175,9 +175,6 @@ int audioRecord(AudioContext *context, const char *keepRunning)
 	it is reported with an assertion in debugging time. */
 	assert(*keepRunning);
 
-	/* TODO: Even though the cycle exits gracefully, sample loss is still a
-	problem! As a metter of fact keepRunning is evaluated without checking if
-	there are still samples to read. */
 	while(*keepRunning && !rc.status && !err) {
 		soundio_flush_events(context->soundio);
 		sleepMs(ACQUISITION_SLEEP);
@@ -187,6 +184,11 @@ int audioRecord(AudioContext *context, const char *keepRunning)
 
 	// Cleaning section
 	if(rc.ringBuffer) {
+		if(!err) {
+			// Be sure to analyze last data, too
+			err = detectAnalyze(detection, rc.ringBuffer);
+		}
+
 		// SoundIo documentation says nothing about cleaning a null ringBuffer.
 		soundio_ring_buffer_destroy(rc.ringBuffer);
 	}
