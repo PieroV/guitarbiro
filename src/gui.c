@@ -2,19 +2,16 @@
 
 /// fprintf, snprintf
 #include <stdio.h>
+/// malloc, free
+#include <stdlib.h>
 
 #include <gtk/gtk.h>
 #include <librsvg/rsvg.h>
 
 /**
- * @brief The path to the XML files that describes the GUI
+ * @brief The path to the XML file that describes the GUI
  */
-static const char *MAIN_WINDOW_FILE = "resources/main_window.glade";
-
-/**
- * @brief The name of the main window in the XML file
- */
-static const char *MAIN_WINDOW_NAME = "MainWindow";
+static const char *GUI_FILE = "resources/main_window.glade";
 
 /**
  * @brief The path to the guitar neck SVG file
@@ -52,9 +49,46 @@ static const char *GUITAR_DOTS_TEMPLATE = "#dot_%d_%d";
 #define GUITAR_DOTS_MAXLENGTH 12
 
 /**
- * @brief The id of the drawing area where the guitar neck is drawn.
+ * @brief Print an error on standard error if a pointer is null and return 0
  */
-static const char *GUITAR_AREA_ID = "NeckArea";
+#define CHECK_WIDGET(ptr, name) if(!(ptr)) { \
+		fprintf(stderr, "Could not find the %s.\n", name); \
+		return 0; \
+	}
+
+struct _GUIContext {
+	/// The main window of the program
+	GtkWidget *mainWindow;
+
+	/// A pointer to the settings window
+	GtkWidget *settingsWindow;
+
+	/// The apply button on the settings dialog
+	GtkWidget *applyButton;
+
+	/// A pointer to the list of backends of the settings dialog
+	GtkComboBoxText *backendList;
+
+	/// A pointer to the list of devices of the settings dialog
+	GtkComboBoxText *deviceList;
+};
+
+/**
+ * @brief Populate the GUI context taking from the builder the required widgets
+ *
+ * @param ctx An instance of the GUI context
+ * @param builder The builder of the GUI
+ * @return Did the operation succeed?
+ */
+static int populateContext(GUIContext *ctx, GtkBuilder *builder);
+
+/**
+ * @brief Connects the needed signals to GTK.
+ *
+ * @param ctx An instance of the GUI context
+ * @param builder The builder of the GUI
+ */
+static void connectSignals(GUIContext *ctx, GtkBuilder *builder);
 
 /**
  * @brief Handle the window close signal
@@ -64,7 +98,7 @@ static void windowClose();
 /**
  * @brief Handle the start recording signal
  *
- * @param button The button that generates the event
+ * @param button The button that triggered the event
  * @param userData Compulsory but not used parameter
  */
 static void startRecording(GtkButton *button, gpointer userData);
@@ -89,6 +123,56 @@ static void startRecording(GtkButton *button, gpointer userData);
 static gboolean queueRedraw(gpointer userData);
 
 /**
+ * @brief Handle redraw events
+ *
+ * @param widget The widget that triggered the event
+ * @param cr The cairo context where the image will be rendered
+ * @param userData Compulsory but not used parameter
+ */
+static void drawGuitar(GtkWidget *widget, cairo_t *cr, gpointer userData);
+
+/**
+ * @brief Callback to quit using the file menu
+ *
+ * @param menuItem The item that triggered the event
+ * @param settingsWindow The pointer to the main window
+ */
+static void menuQuit(GtkMenuItem *menuItem, gpointer mainWindow);
+
+/**
+ * @brief Callback to open the preferences window.
+ *
+ * @param menuItem The item that triggered the event
+ * @param settingsWindow The pointer to the preferences window
+ */
+static void menuShowSettings(GtkMenuItem *menuItem, gpointer settingsWindow);
+
+/**
+ * @brief Callback that handles the pression of the apply button on settings.
+ *
+ * @param button The button that triggered the event
+ * @param contextPtr A pointer to the GUIContext instance
+ */
+static void settingsApply(GtkButton *button, gpointer contextPtr);
+
+/**
+ * @brief Callback that handles the pression of the cancel button on settings.
+ *
+ * @param button The button that triggered the event
+ * @param settingsWindow A pointer to the settings window
+ */
+static void settingsCancel(GtkButton *button, gpointer settingsWindow);
+
+/**
+ * @brief Callback that handles changes on the list of backends in settings.
+ *
+ * @param backendList The list that triggered the event
+ * @param deviceListPtr The pointer to the list of devices in settings
+ */
+static void settingsBackendChanged(GtkComboBox *backendList,
+		gpointer deviceListPtr);
+
+/**
  * @brief The array that contains the frets to highlight
  *
  * We use a global variable because we want to keep the API simple for other
@@ -110,61 +194,51 @@ static short gFrets[GUITAR_STRINGS] = {-1, -1, -1, -1, -1, -1};
  */
 static GtkWidget *gDrawArea;
 
-static void *randomRedraw(void *data);
-#include <unistd.h>
-#include <stdlib.h>
-
-/**
- * @brief Handle redraw events
- *
- * @param widget The widget that created the event
- * @param cr The cairo context where the image will be rendered
- * @param userData Compulsory but not used parameter
- */
-static void drawGuitar(GtkWidget *widget, cairo_t *cr, gpointer userData);
-
-int guiInitMain()
+GUIContext *guiInitMain()
 {
+	GUIContext *ctx;
 	GtkBuilder *builder;
-	GtkWidget *window;
 
-	builder = gtk_builder_new_from_file(MAIN_WINDOW_FILE);
+	ctx = malloc(sizeof(GUIContext));
+	if(!ctx) {
+		fprintf(stderr, "Could not allocate the GUIContext.\n");
+		return 0;
+	}
 
+	builder = gtk_builder_new_from_file(GUI_FILE);
 	if(!builder) {
 		fprintf(stderr, "Could not create the GTK builder.\n");
+		free(ctx);
 		return 0;
 	}
 
-	window = GTK_WIDGET(gtk_builder_get_object(builder, MAIN_WINDOW_NAME));
-	if(!window) {
-		fprintf(stderr, "Could not find the main window data.\n");
+	if(!populateContext(ctx, builder)) {
+		// Errors in this case will be reported by populateContext
 		g_object_unref(builder);
-
+		free(ctx);
 		return 0;
 	}
 
-	gDrawArea = GTK_WIDGET(gtk_builder_get_object(builder, GUITAR_AREA_ID));
-	if(!gDrawArea) {
-		fprintf(stderr, "Could not find the guitar neck drawing area.\n");
-		g_object_unref(builder);
-		g_object_unref(window);
+	connectSignals(ctx, builder);
 
-		return 0;
-	}
-
-	gtk_builder_add_callback_symbol(builder, "windowClose",
-			(GCallback) windowClose);
-	gtk_builder_add_callback_symbol(builder, "startRecording",
-			(GCallback) startRecording);
-	gtk_builder_add_callback_symbol(builder, "drawGuitar",
-			(GCallback) drawGuitar);
-	gtk_builder_connect_signals(builder, NULL);
+	// Temporary here, but wil be moved
+	gtk_combo_box_text_append(ctx->backendList, NULL, "ALSA");
+	gtk_combo_box_text_append(ctx->backendList, NULL, "Pulse");
+	gtk_combo_box_text_append(ctx->backendList, NULL, "OSS");
+	gtk_combo_box_text_append(ctx->deviceList, NULL, "Pulse Mic 1");
+	gtk_combo_box_set_active(GTK_COMBO_BOX(ctx->backendList), 1);
 
 	g_object_unref(builder);
 
-	gtk_widget_show(window);
+	gtk_widget_show(ctx->mainWindow);
 
-	return 1;
+	return ctx;
+}
+
+void guiFree(GUIContext *context)
+{
+	// Just need to free the structure, because GTK will free anything else
+	free(context);
 }
 
 void guiHighlightFrets(semitone_t *frets)
@@ -179,6 +253,56 @@ void guiResetHighlights()
 	for(int i = 0; i < GUITAR_STRINGS; i++) {
 		gFrets[i] = -1;
 	}
+}
+
+int populateContext(GUIContext *ctx, GtkBuilder *builder)
+{
+	ctx->mainWindow = GTK_WIDGET(gtk_builder_get_object(builder, "MainWindow"));
+	CHECK_WIDGET(ctx->mainWindow, "main window")
+
+	ctx->settingsWindow = GTK_WIDGET(gtk_builder_get_object(builder,
+			"SettingsWindow"));
+	CHECK_WIDGET(ctx->settingsWindow, "settings window")
+
+	ctx->applyButton = GTK_WIDGET(gtk_builder_get_object(builder,
+			"settingsApply"));
+	CHECK_WIDGET(ctx->applyButton, "button to save settings")
+
+	ctx->backendList = GTK_COMBO_BOX_TEXT(gtk_builder_get_object(builder,
+			"backendsList"));
+	CHECK_WIDGET(ctx->backendList, "list of backends (in settings dialog)")
+
+	ctx->deviceList = GTK_COMBO_BOX_TEXT(gtk_builder_get_object(builder,
+			"devicesList"));
+	CHECK_WIDGET(ctx->deviceList, "list of devices (in settings dialog)")
+
+	// The only exception that actually is not stored on the context
+	gDrawArea = GTK_WIDGET(gtk_builder_get_object(builder, "NeckArea"));
+	CHECK_WIDGET(gDrawArea, "guitar neck drawing area")
+
+	return 1;
+}
+
+void connectSignals(GUIContext *ctx, GtkBuilder *builder)
+{
+	gtk_builder_add_callback_symbol(builder, "windowClose",
+			G_CALLBACK(windowClose));
+	gtk_builder_add_callback_symbol(builder, "startRecording",
+			G_CALLBACK(startRecording));
+	gtk_builder_add_callback_symbol(builder, "drawGuitar",
+			G_CALLBACK(drawGuitar));
+	gtk_builder_add_callback_symbol(builder, "menuQuit",
+			G_CALLBACK(menuQuit));
+	gtk_builder_add_callback_symbol(builder, "menuShowSettings",
+			G_CALLBACK(menuShowSettings));
+	gtk_builder_add_callback_symbol(builder, "settingsCancel",
+			G_CALLBACK(settingsCancel));
+	gtk_builder_add_callback_symbol(builder, "settingsBackendChanged",
+			G_CALLBACK(settingsBackendChanged));
+	gtk_builder_connect_signals(builder, NULL);
+
+	g_signal_connect(G_OBJECT(ctx->applyButton), "clicked",
+			G_CALLBACK(settingsApply), ctx);
 }
 
 void windowClose()
@@ -244,18 +368,56 @@ void drawGuitar(GtkWidget *widget, cairo_t *cr, gpointer userData)
 	g_object_unref(rsvgHandle);
 }
 
-void *randomRedraw(void *data)
+void menuQuit(GtkMenuItem *menuItem, gpointer mainWindow)
 {
-	srand(time(NULL));
+	gtk_widget_destroy(GTK_WIDGET(mainWindow));
+	gtk_main_quit();
+}
 
-	while(1) {
-		for(int i = 0; i < 6; i++) {
-			gFrets[i] = -1;
-		}
-		gFrets[rand() % 6] = rand() % 23;
+void menuShowSettings(GtkMenuItem *menuItem, gpointer settingsWindow)
+{
+	gtk_window_present(GTK_WINDOW(settingsWindow));
+}
 
-		gdk_threads_add_idle(queueRedraw, 0);
-		sleep(rand() % 3);
+void settingsApply(GtkButton *button, gpointer contextPtr)
+{
+	GUIContext *ctx = (GUIContext *) contextPtr;
+
+	printf("Doing something to apply settings...\n");
+	printf("Backend: %s\n", gtk_combo_box_text_get_active_text(ctx->backendList));
+	printf("Device: %s\n", gtk_combo_box_text_get_active_text(ctx->deviceList));
+
+	gtk_widget_hide(ctx->settingsWindow);
+}
+
+void settingsCancel(GtkButton *button, gpointer settingsWindow)
+{
+	gtk_widget_hide(GTK_WIDGET(settingsWindow));
+}
+
+void settingsBackendChanged(GtkComboBox *backendList, gpointer deviceListPtr)
+{
+	GtkComboBoxText *deviceList = GTK_COMBO_BOX_TEXT(deviceListPtr);
+	GtkComboBox *deviceBox = GTK_COMBO_BOX(deviceListPtr);
+	if(!deviceList) {
+		return;
+	}
+
+	gint id = gtk_combo_box_get_active(backendList);
+
+	if(id == 0) {
+		gtk_combo_box_text_remove_all(deviceList);
+		gtk_combo_box_text_append(deviceList, NULL, "Alsa Mic 1");
+		gtk_combo_box_text_append(deviceList, NULL, "Alsa Mic 2");
+		gtk_combo_box_set_active(deviceBox, 1);
+	} else if(id == 1) {
+		gtk_combo_box_text_remove_all(deviceList);
+		gtk_combo_box_text_append(deviceList, NULL, "Pulse Mic 1");
+		gtk_combo_box_set_active(deviceBox, 0);
+	} else if(id == 2) {
+		gtk_combo_box_text_remove_all(deviceList);
+		gtk_combo_box_text_append(deviceList, NULL, "/dev/dsp");
+		gtk_combo_box_set_active(deviceBox, 0);
 	}
 }
 

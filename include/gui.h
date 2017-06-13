@@ -13,11 +13,24 @@
 #include "guitar.h"
 
 /**
+ * @brief A type that is used internally to exchange data.
+ *
+ * Different functions need to have several data about the GUI elements, the
+ * audio status etc...
+ */
+typedef struct _GUIContext GUIContext;
+
+/**
  * @brief Initializes the main window
  *
- * @return Did the operation succeed?
+ * @return A pointer to an instance to GUIContext if succeeded or null otherwise
  */
-extern int guiInitMain();
+extern GUIContext *guiInitMain();
+
+/**
+ * @brief Dispose of the GUIContext instance.
+ */
+extern void guiFree(GUIContext *context);
 
 /**
  * @brief Set the frets that must be highlighted in the guitar neck.
