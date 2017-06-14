@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
 
 	guiFree(ctx);
 	audioClose(audio);
+	estimateFree();
 
 	return 0;
 }
