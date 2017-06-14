@@ -10,6 +10,7 @@
 #ifndef __GUI_H
 #define __GUI_H
 
+#include "audio.h"
 #include "guitar.h"
 
 /**
@@ -23,9 +24,10 @@ typedef struct _GUIContext GUIContext;
 /**
  * @brief Initializes the main window
  *
+ * @param audio The audio context, which is used to start and stop recording
  * @return A pointer to an instance to GUIContext if succeeded or null otherwise
  */
-extern GUIContext *guiInitMain();
+extern GUIContext *guiInitMain(AudioContext *audio);
 
 /**
  * @brief Dispose of the GUIContext instance.

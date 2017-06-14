@@ -6,6 +6,7 @@
  * there initializes and runs all the other parts of it.
  */
 
+#include "audio.h"
 #include "gui.h"
 
 /// fprintf
@@ -23,18 +24,25 @@
 int main(int argc, char *argv[])
 {
 	GUIContext *ctx;
+	AudioContext *audio;
+
+	audio = audioInit();
+	if(!audio) {
+		fprintf(stderr, "An error occurred initializating the audio system.\n");
+		return 1;
+	}
 
 	gtk_init(&argc, &argv);
 
-	if(!(ctx = guiInitMain())) {
+	if(!(ctx = guiInitMain(audio))) {
 		fprintf(stderr, "Errors occurred while trying to initilize the GUI.\n");
-		return 1;
+		return 2;
 	}
 
 	gtk_main();
 
 	guiFree(ctx);
-	ctx = 0;
+	audioClose(audio);
 
 	return 0;
 }

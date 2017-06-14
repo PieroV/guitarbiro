@@ -7,22 +7,24 @@
 
 /// printf, scanf, fprintf
 #include <stdio.h>
+/// malloc, free
+#include <stdlib.h>
+/// strlen
+#include <string.h>
 
 /**
- * @brief Asks the user for the backend he or she wants to use.
- * @todo Check for available backends.
+ * @brief Open and return a device, given its index
+ *
+ * @param soundio The SoundIo instance
+ * @param index The index of the device in the internal SoundIo list
+ * @return The pointer to the device struct, or NULL in case of error
  */
-static enum SoundIoBackend chooseBackend();
+static struct SoundIoDevice *getInputDevice(struct SoundIo *soundio, int index);
 
-/**
- * @brief Asks the user which input is the guitar plugged in.
- * @return The device to use to record, or the null pointer in case of errror.
- * @note Remember to unref the device pointer when you have finished to use it.
- */
-static struct SoundIoDevice *getInputDevice(struct SoundIo *soundio);
-
-int audioInit(AudioContext *context)
+AudioContext *audioInit()
 {
+	AudioContext *context = malloc(sizeof(AudioContext));
+
 	/* The context could be dirty, so be sure to clean as first thing, to avoid
 	the unref of memory areas that haven't actually been allocated.
 	On the contrary, we won't clean soundio, because we will change it
@@ -32,121 +34,199 @@ int audioInit(AudioContext *context)
 	context->soundio = soundio_create();
 	if(!context->soundio) {
 		fprintf(stderr, "Could not allocate the SoundIo structure.");
-		return 1;
-	}
-
-	enum SoundIoBackend backend = chooseBackend();
-	/* We assume backend won't ever be SoundIoBackendNone, as the do-while loop
-	would not end in case, but in future if this isn't guaranteed anymore, we
-	should check. */
-	int err = soundio_connect_backend(context->soundio, backend);
-	if(err) {
-		fprintf(stderr, "Error: %s\n", soundio_strerror(err));
-		return 1;
-	}
-
-	if(!(context->device = getInputDevice(context->soundio))) {
-		// getInputDevice has already printed the error to the user
-		return 2;
-	}
-
-	return 0;
-}
-
-static enum SoundIoBackend chooseBackend()
-{
-	/// The enum that will be returned
-	enum SoundIoBackend backend = SoundIoBackendNone;
-
-	// TODO: Print only backends that are actually available
-	printf("Please enter the backend you want to use:\n");
-	do {
-		printf(" a) ALSA\n c) CoreAudio\n j) JACK\n p) PulseAudio \n"
-				" w) Wsapi\n d) dummy\n");
-
-		/// A temporary variable that stores the backend choice
-		char choice;
-		// TODO: if CLI interface will be kept, clean spaces
-		scanf("%c", &choice);
-
-		switch(choice) {
-			case 'a':
-				backend = SoundIoBackendAlsa;
-				break;
-
-			case 'c':
-				backend = SoundIoBackendCoreAudio;
-				break;
-
-			case 'j':
-				backend = SoundIoBackendJack;
-				break;
-
-			case 'p':
-				backend = SoundIoBackendPulseAudio;
-				break;
-
-			case 'w':
-				backend = SoundIoBackendWasapi;
-				break;
-
-			case 'd':
-				backend = SoundIoBackendDummy;
-				break;
-
-			default:
-				printf("Invalid choice! Please enter it again.\n\n");
-		}
-	} while(backend == SoundIoBackendNone);
-
-	return backend;
-}
-
-struct SoundIoDevice *getInputDevice(struct SoundIo *soundio)
-{
-	/// The struct pointer that will be returned
-	struct SoundIoDevice *device = 0;
-
-	// An event flush is always required to have the updated list of devices.
-	soundio_flush_events(soundio);
-	/// The number of input devices
-	int inputCount = soundio_input_device_count(soundio);
-	/// The index of the default input device
-	int defaultInput = soundio_default_input_device_index(soundio);
-
-	if(!inputCount) {
-		fprintf(stderr, "Error: no input devices found.");
+		free(context);
 		return 0;
 	}
 
-	printf("Please choose an input device:\n");
+	int err = soundio_connect(context->soundio);
+	if(err) {
+		fprintf(stderr, "Error: %s\n", soundio_strerror(err));
+		free(context);
+		return 0;
+	}
 
-	for(int i = 0; i < inputCount; i++) {
-		device = soundio_get_input_device(soundio, i);
+	// We need device information in order to open the default device
+	soundio_flush_events(context->soundio);
+	int defaultDevice = soundio_default_input_device_index(context->soundio);
+	context->device = getInputDevice(context->soundio, defaultDevice);
 
-		const char *defaultStr = i == defaultInput ? " (default)" : "";
-	    const char *rawStr = device->is_raw ? " (raw)" : "";
-	    printf(" %d) %s%s%s\n", i + 1, device->name, defaultStr, rawStr);
+	/* Don't block the program in case of failure while opening the default
+	device, so that it can be changed using the settings dialog. */
+
+	return context;
+}
+
+char const **audioGetBackends(AudioContext *context, int *count, int *current)
+{
+	if(current) {
+		// In any case set this error condition
+		*current = -1;
+	}
+
+	if(!context || !context->soundio) {
+		*count = 0;
+		return 0;
+	}
+
+	*count = soundio_backend_count(context->soundio);
+	char const **ret = (char const **) malloc(sizeof(const char *) * *count);
+
+	for(int i = 0; i < *count; i++) {
+		enum SoundIoBackend backend = soundio_get_backend(context->soundio, i);
+		ret[i] = soundio_backend_name(backend);
+
+		if(*current && backend == context->soundio->current_backend) {
+			*current = i;
+		}
+	}
+
+	return ret;
+}
+
+const char *audioGetCurrentBackend(AudioContext *context)
+{
+	if(!context || !context->soundio) {
+		return 0;
+	}
+
+	return soundio_backend_name(context->soundio->current_backend);
+}
+
+char **audioGetDevices(AudioContext *context, int *count, int *current)
+{
+	char **ret;
+	struct SoundIoDevice *device;
+
+	if(current) {
+		// In any case set this error condition
+		*current = -1;
+	}
+
+	if(!context || !context->soundio) {
+		*count = 0;
+		return 0;
+	}
+
+	// An event flush is always required to have the updated list of devices.
+	soundio_flush_events(context->soundio);
+
+	if(current) {
+		*current = soundio_default_input_device_index(context->soundio);
+	}
+
+	*count = soundio_input_device_count(context->soundio);
+	ret = (char **) malloc(sizeof(const char *) * *count);
+
+	for(int i = 0; i < *count; i++) {
+		device = soundio_get_input_device(context->soundio, i);
+
+		// Sadly strdup isn't standard...
+		ret[i] = malloc(strlen(device->name) + 1);
+		strcpy(ret[i], device->name);
+
+		// If the in-use device is not the default one...
+		if(current && context->device &&
+				soundio_device_equal(context->device, device)) {
+			*current = i;
+		}
 
 		soundio_device_unref(device);
 	}
 
-	/// A temporary integer that stores the device choice
-	int chosen;
+	return ret;
+}
 
-	scanf("%d", &chosen);
-	while(chosen < 1 || chosen > inputCount) {
-		printf("Invalid choice! Please choose the device again: ");
-		scanf("%d", &chosen);
+char **audioGetBackendDevices(const char *backend, int *count,
+		int *defaultDevice)
+{
+	/**
+	 * @brief A temporary AudioContext instance
+	 *
+	 * We use a temporary AudioContext instead of creating a helper because it
+	 * would in any case require an audiocontext to set the "current" paramter,
+	 * or we should retierate on the other version of audioGetDevices to set it.
+	 */
+	AudioContext tmpContext;
+	char **ret;
+
+	tmpContext.soundio = soundio_create();
+	tmpContext.device = 0;
+
+	if(audioSetBackend(&tmpContext, backend)) {
+		*count = 0;
+		ret = 0;
+	} else {
+		ret = audioGetDevices(&tmpContext, count, defaultDevice);
 	}
 
-	int tmp;
-	while((tmp = getchar()) != '\n' && tmp != EOF);
+	/* Destroy soundio manually, as audioClose would try to free the temporary
+	context that actually is on stack. */
+	soundio_disconnect(tmpContext.soundio);
+	soundio_destroy(tmpContext.soundio);
 
-	/* Since we haven't flushed events, we assume the list hasn't changed
-	internally. Otherwise we should have saved pointers to the pointers of the
-	devices, and then unref all but the one the user has chosen. */
-	device = soundio_get_input_device(soundio, --chosen);
+	return ret;
+}
+
+int audioSetBackend(AudioContext *context, const char *backend)
+{
+	/// The backend that soundio will connect to
+	enum SoundIoBackend backendId = SoundIoBackendNone;
+	/// The number of available backends
+	int count;
+	/// The error code of soundio_connect_backend
+	int err;
+
+	count = soundio_backend_count(context->soundio);
+	if(!count || !backend) {
+		return 1;
+	}
+
+	/* audioGetBackends could have been used, but since we need the backend from
+	the enum we would have had to reiterate again all the backends, so iterate
+	once here */
+	for(int i = 0; i < count && backendId == SoundIoBackendNone; i++) {
+		enum SoundIoBackend tmp = soundio_get_backend(context->soundio, i);
+		const char *name = soundio_backend_name(tmp);
+		if(!strcmp(name, backend)) {
+			backendId = tmp;
+		}
+	}
+
+	if(backendId == SoundIoBackendNone) {
+		return 1;
+	}
+
+	if(context->soundio->current_backend != SoundIoBackendNone) {
+		soundio_disconnect(context->soundio);
+	}
+
+	err = soundio_connect_backend(context->soundio, backendId);
+	return err != 0;
+}
+
+const char *audioGetCurrentDevice(AudioContext *context)
+{
+	return context->device->name;
+}
+
+void audioClose(AudioContext *context)
+{
+	if(context->device) {
+		soundio_device_unref(context->device);
+		context->device = 0;
+	}
+
+	if(context->soundio) {
+		soundio_destroy(context->soundio);
+		context->soundio = 0;
+	}
+
+	free(context);
+}
+
+struct SoundIoDevice *getInputDevice(struct SoundIo *soundio, int index)
+{
+	struct SoundIoDevice *device = soundio_get_input_device(soundio, index);
 
 	if(device->probe_error) {
 		fprintf(stderr, "Unable to probe device: %s.\n",
@@ -164,17 +244,4 @@ struct SoundIoDevice *getInputDevice(struct SoundIo *soundio)
 	}
 
 	return device;
-}
-
-void audioClose(AudioContext *context)
-{
-	if(context->device) {
-		soundio_device_unref(context->device);
-		context->device = 0;
-	}
-
-	if(context->soundio) {
-		soundio_destroy(context->soundio);
-		context->soundio = 0;
-	}
 }

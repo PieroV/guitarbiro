@@ -63,14 +63,23 @@ struct _GUIContext {
 	/// A pointer to the settings window
 	GtkWidget *settingsWindow;
 
+	/// The button to start and stop recording
+	GtkWidget *recordButton;
+
 	/// The apply button on the settings dialog
 	GtkWidget *applyButton;
+
+	/// The cancel button on the settings dialog
+	GtkWidget *cancelButton;
 
 	/// A pointer to the list of backends of the settings dialog
 	GtkComboBoxText *backendList;
 
 	/// A pointer to the list of devices of the settings dialog
 	GtkComboBoxText *deviceList;
+
+	/// The AudioContext instance
+	AudioContext *audio;
 };
 
 /**
@@ -78,9 +87,11 @@ struct _GUIContext {
  *
  * @param ctx An instance of the GUI context
  * @param builder The builder of the GUI
+ * @param audio The instance of the audio context
  * @return Did the operation succeed?
  */
-static int populateContext(GUIContext *ctx, GtkBuilder *builder);
+static int populateContext(GUIContext *ctx, GtkBuilder *builder,
+		AudioContext *audio);
 
 /**
  * @brief Connects the needed signals to GTK.
@@ -91,6 +102,13 @@ static int populateContext(GUIContext *ctx, GtkBuilder *builder);
 static void connectSignals(GUIContext *ctx, GtkBuilder *builder);
 
 /**
+ * @brief Insert backends and devices into settings lists.
+ *
+ * @param ctx An instance of the GUI context
+ */
+static void populateSettings(GUIContext *ctx);
+
+/**
  * @brief Handle the window close signal
  */
 static void windowClose();
@@ -99,9 +117,9 @@ static void windowClose();
  * @brief Handle the start recording signal
  *
  * @param button The button that triggered the event
- * @param userData Compulsory but not used parameter
+ * @param contextPtr A pointer to the GUI context instance
  */
-static void startRecording(GtkButton *button, gpointer userData);
+static void recordClicked(GtkButton *button, gpointer contextPtr);
 
 /**
  * @brief Callback function that just queues the redraw of the neck drawing area
@@ -158,19 +176,34 @@ static void settingsApply(GtkButton *button, gpointer contextPtr);
 /**
  * @brief Callback that handles the pression of the cancel button on settings.
  *
- * @param button The button that triggered the event
- * @param settingsWindow A pointer to the settings window
+ * @param contextPtr A pointer to the GUIContext instance
  */
-static void settingsCancel(GtkButton *button, gpointer settingsWindow);
+static void settingsCancel(gpointer contextPtr);
 
 /**
  * @brief Callback that handles changes on the list of backends in settings.
  *
  * @param backendList The list that triggered the event
- * @param deviceListPtr The pointer to the list of devices in settings
+ * @param contextPtr A pointer to the GUIContext instance
  */
 static void settingsBackendChanged(GtkComboBox *backendList,
-		gpointer deviceListPtr);
+		gpointer contextPtr);
+
+/**
+ * @brief Prevent the settings dialog deletion.
+ *
+ * When a dialog is closed using the X button or the ESCAPE key, GTK
+ * automatically triggers a delete event and it destroys the widget.
+ * However this is not the behaviour we want from the program, because we want
+ * to be able to show any time we want the settings dialog.
+ *
+ * @param widget The widget that triggers the event
+ * @param event Information about the event
+ * @param data Compulsory but not used parameter
+ * @return TRUE, to mark the delete event as completed
+ */
+static gboolean windowPreventDelete(GtkWidget *widget, GdkEvent *event,
+		gpointer data);
 
 /**
  * @brief The array that contains the frets to highlight
@@ -194,7 +227,7 @@ static short gFrets[GUITAR_STRINGS] = {-1, -1, -1, -1, -1, -1};
  */
 static GtkWidget *gDrawArea;
 
-GUIContext *guiInitMain()
+GUIContext *guiInitMain(AudioContext *audio)
 {
 	GUIContext *ctx;
 	GtkBuilder *builder;
@@ -212,7 +245,7 @@ GUIContext *guiInitMain()
 		return 0;
 	}
 
-	if(!populateContext(ctx, builder)) {
+	if(!populateContext(ctx, builder, audio)) {
 		// Errors in this case will be reported by populateContext
 		g_object_unref(builder);
 		free(ctx);
@@ -220,13 +253,7 @@ GUIContext *guiInitMain()
 	}
 
 	connectSignals(ctx, builder);
-
-	// Temporary here, but wil be moved
-	gtk_combo_box_text_append(ctx->backendList, NULL, "ALSA");
-	gtk_combo_box_text_append(ctx->backendList, NULL, "Pulse");
-	gtk_combo_box_text_append(ctx->backendList, NULL, "OSS");
-	gtk_combo_box_text_append(ctx->deviceList, NULL, "Pulse Mic 1");
-	gtk_combo_box_set_active(GTK_COMBO_BOX(ctx->backendList), 1);
+	populateSettings(ctx);
 
 	g_object_unref(builder);
 
@@ -255,7 +282,7 @@ void guiResetHighlights()
 	}
 }
 
-int populateContext(GUIContext *ctx, GtkBuilder *builder)
+int populateContext(GUIContext *ctx, GtkBuilder *builder, AudioContext *audio)
 {
 	ctx->mainWindow = GTK_WIDGET(gtk_builder_get_object(builder, "MainWindow"));
 	CHECK_WIDGET(ctx->mainWindow, "main window")
@@ -264,9 +291,16 @@ int populateContext(GUIContext *ctx, GtkBuilder *builder)
 			"SettingsWindow"));
 	CHECK_WIDGET(ctx->settingsWindow, "settings window")
 
+	ctx->recordButton = GTK_WIDGET(gtk_builder_get_object(builder, "record"));
+	CHECK_WIDGET(ctx->recordButton, "button to start and stop recording")
+
 	ctx->applyButton = GTK_WIDGET(gtk_builder_get_object(builder,
 			"settingsApply"));
 	CHECK_WIDGET(ctx->applyButton, "button to save settings")
+
+	ctx->cancelButton = GTK_WIDGET(gtk_builder_get_object(builder,
+			"settingsCancel"));
+	CHECK_WIDGET(ctx->cancelButton, "button to cancel settings save")
 
 	ctx->backendList = GTK_COMBO_BOX_TEXT(gtk_builder_get_object(builder,
 			"backendsList"));
@@ -280,6 +314,8 @@ int populateContext(GUIContext *ctx, GtkBuilder *builder)
 	gDrawArea = GTK_WIDGET(gtk_builder_get_object(builder, "NeckArea"));
 	CHECK_WIDGET(gDrawArea, "guitar neck drawing area")
 
+	ctx->audio = audio;
+
 	return 1;
 }
 
@@ -287,22 +323,51 @@ void connectSignals(GUIContext *ctx, GtkBuilder *builder)
 {
 	gtk_builder_add_callback_symbol(builder, "windowClose",
 			G_CALLBACK(windowClose));
-	gtk_builder_add_callback_symbol(builder, "startRecording",
-			G_CALLBACK(startRecording));
 	gtk_builder_add_callback_symbol(builder, "drawGuitar",
 			G_CALLBACK(drawGuitar));
 	gtk_builder_add_callback_symbol(builder, "menuQuit",
 			G_CALLBACK(menuQuit));
 	gtk_builder_add_callback_symbol(builder, "menuShowSettings",
 			G_CALLBACK(menuShowSettings));
-	gtk_builder_add_callback_symbol(builder, "settingsCancel",
-			G_CALLBACK(settingsCancel));
-	gtk_builder_add_callback_symbol(builder, "settingsBackendChanged",
-			G_CALLBACK(settingsBackendChanged));
 	gtk_builder_connect_signals(builder, NULL);
 
+	g_signal_connect_swapped(G_OBJECT(ctx->settingsWindow), "close",
+			G_CALLBACK(settingsCancel), ctx);
+	g_signal_connect(G_OBJECT(ctx->settingsWindow), "delete-event",
+			G_CALLBACK(windowPreventDelete), NULL);
+	g_signal_connect(G_OBJECT(ctx->recordButton), "clicked",
+			G_CALLBACK(recordClicked), ctx);
 	g_signal_connect(G_OBJECT(ctx->applyButton), "clicked",
 			G_CALLBACK(settingsApply), ctx);
+	g_signal_connect_swapped(G_OBJECT(ctx->cancelButton), "clicked",
+			G_CALLBACK(settingsCancel), ctx);
+	g_signal_connect(G_OBJECT(ctx->backendList), "changed",
+			G_CALLBACK(settingsBackendChanged), ctx);
+}
+
+void populateSettings(GUIContext *ctx)
+{
+	/// The list of backends
+	char const **backends = NULL;
+	/// The number of bakends
+	int count = 0;
+	/// The current backend
+	int current = -1;
+
+	backends = audioGetBackends(ctx->audio, &count, &current);
+	gtk_combo_box_text_remove_all(ctx->backendList);
+	for(int i = 0; i < count; i++) {
+		gtk_combo_box_text_append(ctx->backendList, NULL, backends[i]);
+	}
+	if(current != -1) {
+		/* This will populate the device list automatically, because the changed
+		event will be triggered. */
+		gtk_combo_box_set_active(GTK_COMBO_BOX(ctx->backendList), current);
+	}
+
+	if(backends) {
+		free(backends);
+	}
 }
 
 void windowClose()
@@ -310,7 +375,7 @@ void windowClose()
     gtk_main_quit();
 }
 
-void startRecording(GtkButton *button, gpointer userData)
+void recordClicked(GtkButton *button, gpointer contextPtr)
 {
 	static char recordingToggle = 0;
 
@@ -390,35 +455,78 @@ void settingsApply(GtkButton *button, gpointer contextPtr)
 	gtk_widget_hide(ctx->settingsWindow);
 }
 
-void settingsCancel(GtkButton *button, gpointer settingsWindow)
+void settingsCancel(gpointer contextPtr)
 {
-	gtk_widget_hide(GTK_WIDGET(settingsWindow));
+	GUIContext *ctx = (GUIContext *) contextPtr;
+
+	/* Repopulate to make sure that next time the settings dialog will be
+	opened, it will have the current and valid settings. */
+	populateSettings(ctx);
+
+	gtk_widget_hide(ctx->settingsWindow);
 }
 
-void settingsBackendChanged(GtkComboBox *backendList, gpointer deviceListPtr)
+void settingsBackendChanged(GtkComboBox *backendList, gpointer contextPtr)
 {
-	GtkComboBoxText *deviceList = GTK_COMBO_BOX_TEXT(deviceListPtr);
-	GtkComboBox *deviceBox = GTK_COMBO_BOX(deviceListPtr);
-	if(!deviceList) {
+	/// The GUIContext instance
+	GUIContext *ctx = (GUIContext *)contextPtr;
+	/// The name of the selected backend
+	gchar *backend;
+	/// The list of devices
+	char **devices;
+	/// The number of devices
+	int count;
+	/// The default device
+	int def;
+
+	if(!ctx) {
 		return;
 	}
 
-	gint id = gtk_combo_box_get_active(backendList);
-
-	if(id == 0) {
-		gtk_combo_box_text_remove_all(deviceList);
-		gtk_combo_box_text_append(deviceList, NULL, "Alsa Mic 1");
-		gtk_combo_box_text_append(deviceList, NULL, "Alsa Mic 2");
-		gtk_combo_box_set_active(deviceBox, 1);
-	} else if(id == 1) {
-		gtk_combo_box_text_remove_all(deviceList);
-		gtk_combo_box_text_append(deviceList, NULL, "Pulse Mic 1");
-		gtk_combo_box_set_active(deviceBox, 0);
-	} else if(id == 2) {
-		gtk_combo_box_text_remove_all(deviceList);
-		gtk_combo_box_text_append(deviceList, NULL, "/dev/dsp");
-		gtk_combo_box_set_active(deviceBox, 0);
+	backend = gtk_combo_box_text_get_active_text(ctx->backendList);
+	if(!backend) {
+		// Should never happen, but checking is always better...
+		return;
 	}
+	devices = audioGetBackendDevices(backend, &count, &def);
+	gtk_combo_box_text_remove_all(ctx->deviceList);
+
+	if(!devices) {
+		GtkWidget *dialog = gtk_message_dialog_new(
+				GTK_WINDOW(ctx->settingsWindow), GTK_DIALOG_DESTROY_WITH_PARENT,
+				GTK_MESSAGE_ERROR, GTK_BUTTONS_OK, "Could not retreive device "
+				"list for backend %s. Please make sure any required server "
+				"(e. g. Jackd) is running.", backend);
+		gtk_dialog_run(GTK_DIALOG(dialog));
+		// The dialog is blocking
+		gtk_widget_destroy(dialog);
+
+		// Disable saving and device changing
+		gtk_widget_set_sensitive(ctx->applyButton, FALSE);
+		gtk_widget_set_sensitive(GTK_WIDGET(ctx->deviceList), FALSE);
+
+		return;
+	}
+
+	// Re-enable saving and device changing in case they had been disabled
+	gtk_widget_set_sensitive(ctx->applyButton, TRUE);
+	gtk_widget_set_sensitive(GTK_WIDGET(ctx->deviceList), TRUE);
+
+	for(int i = 0; i < count; i++) {
+		gtk_combo_box_text_append(ctx->deviceList, NULL, devices[i]);
+		free(devices[i]);
+	}
+	if(def != -1) {
+		gtk_combo_box_set_active(GTK_COMBO_BOX(ctx->deviceList), def);
+	}
+
+	free(devices);
+}
+
+gboolean windowPreventDelete(GtkWidget *widget, GdkEvent *event, gpointer data)
+{
+	gtk_widget_hide(widget);
+	return TRUE;
 }
 
 gboolean queueRedraw(gpointer userData)

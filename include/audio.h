@@ -6,6 +6,9 @@
 #ifndef __AUDIO_H
 #define __AUDIO_H
 
+/// size_t
+#include <stddef.h>
+
 #include <soundio/soundio.h>
 
 /**
@@ -34,23 +37,11 @@ typedef struct {
 /**
  * @brief Initializes libSoundIo.
  *
- * Initializes libSoundIo, then prompt the user for the backend and the
- * interface to use using the command line.
+ * Initializes libSoundIo and connects it to the default backend.
  *
- * The context struct must be a valid area of memory. The caller of this
- * function will remain its owner and will have to call free after having called
- * audioClose, eventually.
- *
- * @note If this function fails (non 0 returned code), calling audioClose will
- *  remain necessary.
- *
- * @param context An instance of the AudioContext struct, that has to be
- *  allocated by the caller, even though she/he should not modify it.
- * @return 0 in case of success, another integer in case of error:
- *  1 - an error occurred while initializating libSoundIo
- *  2 - an error occurred while choosing/opening the device
+ * @return An instance of AudioContext struct, or NULL in case of error
  */
-extern int audioInit(AudioContext *context);
+extern AudioContext *audioInit();
 
 /**
  * @brief Closes all handlers to devices and destroys the libSoundIo instance.
@@ -58,10 +49,82 @@ extern int audioInit(AudioContext *context);
  * @note The function doesn't call free on context (to avoid problems if it is
  * not in heap).
  *
- * @param context The AudioContext instance. Note that if it has been allocated
- *  on heap, e.g. through malloc, the caller will have to free it.
+ * @param context The AudioContext instance
  */
 extern void audioClose(AudioContext *context);
+
+/**
+ * @brief Get the list of audio backends.
+ *
+ * @param context The AudioContext instance
+ * @param count An output parameter that will contain the number of available
+ *  backends. Note that it must be a valid pointer
+ * @param current An output parameter that will contain the index of the current
+ *  backend. If null it won't be used
+ * @return The list of backend names. The caller will have to free it
+ */
+extern char const **audioGetBackends(AudioContext *context, int *count,
+		int *current);
+
+/**
+ * @brief Get the name of the backend that is currently being used.
+ *
+ * @param context The AudioContext instance
+ */
+extern const char *audioGetCurrentBackend(AudioContext *context);
+
+/**
+ * @brief Get the list of input devices that the connected backend can use.
+ *
+ * @param context The AudioContext instance
+ * @param count An output parameter that will contain the number of available
+ *  devices. Note that it must be a valid pointer
+ * @param current An output parameter that will contain the index of the current
+ *  or the default device. If null it won't be used
+ * @return The list of device names. The caller will have to free all the items
+ *  and then the array (not only the array!)
+ */
+extern char **audioGetDevices(AudioContext *context, int *count, int *current);
+
+/**
+ * @brief Get the list of input devices that an audio backend can use.
+ *
+ * This function is very similar to audioGetDevices, but instead of using the
+ * current audio context and the current backend, it creates a new one, thus
+ * allowing to get temporary list of devices, without having to worry about
+ * stopping the recording, closing the current context, etc etc...
+ *
+ * @param backend The name of the backend to get the device of
+ * @param count An output parameter that will contain the number of available
+ *  devices. Note that it must be a valid pointer
+ * @param defaultDevice An output parameter that will contain the default input
+ *  device for that backend. If NULL it will be ignored
+ * @return The list of device names. The caller will have to free all the items
+ *  and then the array (not only the array!)
+ */
+ extern char **audioGetBackendDevices(const char *backend, int *count,
+		int *defaultDevice);
+
+/**
+ * @brief Get the name of the device that is currently being used.
+ *
+ * @param context The AudioContext instance
+ */
+extern const char *audioGetCurrentDevice(AudioContext *context);
+
+/**
+ * @brief Connect soundio to (another) backend.
+ *
+ * @param context The AudioContext instance
+ * @param backend The backend name
+ * @return A status code:
+ *  * 0 in case of success
+ *  * 1 in case that the chosen backend is not available, but the current
+ *    context remains valid
+ *  * 2 if the connection failed, therefore the current context isn't valid
+ *    anymore
+ */
+extern int audioSetBackend(AudioContext *context, const char *backend);
 
 /**
  * @brief Start recording.

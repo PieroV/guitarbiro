@@ -73,13 +73,12 @@
           </packing>
         </child>
         <child>
-          <object class="GtkButton">
+          <object class="GtkButton" id="record">
             <property name="label">gtk-media-record</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
             <property name="use_stock">True</property>
-            <signal name="clicked" handler="startRecording" swapped="no"/>
           </object>
           <packing>
             <property name="expand">False</property>
@@ -100,7 +99,6 @@
     <property name="type_hint">dialog</property>
     <property name="transient_for">MainWindow</property>
     <property name="attached_to">MainWindow</property>
-    <signal name="close" handler="settingsCancel" swapped="no"/>
     <child internal-child="vbox">
       <object class="GtkBox">
         <property name="can_focus">False</property>
@@ -125,13 +123,12 @@
               </packing>
             </child>
             <child>
-              <object class="GtkButton">
+              <object class="GtkButton" id="settingsCancel">
                 <property name="label">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
                 <property name="use_stock">True</property>
-                <signal name="clicked" handler="settingsCancel" object="SettingsWindow" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">True</property>
@@ -167,7 +164,6 @@
               <object class="GtkComboBoxText" id="backendsList">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <signal name="changed" handler="settingsBackendChanged" object="devicesList" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">False</property>
