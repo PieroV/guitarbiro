@@ -5,8 +5,12 @@
 /// malloc, free
 #include <stdlib.h>
 
+/// All the needed GTK functions
 #include <gtk/gtk.h>
+/// API to render SVG images, used to draw the guitar neck
 #include <librsvg/rsvg.h>
+/// Portable threading API
+#include <glib.h>
 
 /**
  * @brief The path to the XML file that describes the GUI
@@ -80,6 +84,12 @@ struct _GUIContext {
 
 	/// The AudioContext instance
 	AudioContext *audio;
+
+	/// The flag to stop the recording loop
+	char keepRecording;
+
+	/// The recording thread
+	GThread *recordingThread;
 };
 
 /**
@@ -206,6 +216,38 @@ static gboolean windowPreventDelete(GtkWidget *widget, GdkEvent *event,
 		gpointer data);
 
 /**
+ * @brief Start the recording thread
+ *
+ * @param ctx A pointer to the GUIContext
+ */
+static void startRecording(GUIContext *ctx);
+
+/**
+ * @brief Stop the recording thread
+ * @note This will cause the thread to join, so it could take some time before
+ *  returning
+ *
+ * @param ctx A pointer to the GUIContext
+ */
+static void stopRecording(GUIContext *ctx);
+
+/**
+ * @brief Recording thread callback.
+ *
+ * The data acquisition has been implemented in a blocking fashion, therefore it
+ * needs its own thread, which, in this way, can also do the computations on the
+ * signal, without having to bother about other things, such as GUI
+ * responsiveness etc...
+ *
+ * The thread managing is done here to immeediately interact with GUI when we
+ * have updates, instead of using more signals or similar things.
+ *
+ * @param contextPtr A pointer to the GUIContext instance
+ * @return Always NULL
+ */
+static gpointer recordingWorker(gpointer contextPtr);
+
+/**
  * @brief The array that contains the frets to highlight
  *
  * We use a global variable because we want to keep the API simple for other
@@ -273,6 +315,8 @@ void guiHighlightFrets(semitone_t *frets)
 	for(int i = 0; i < GUITAR_STRINGS; i++) {
 		gFrets[i] = frets[i];
 	}
+
+	gdk_threads_add_idle(queueRedraw, NULL);
 }
 
 void guiResetHighlights()
@@ -280,6 +324,8 @@ void guiResetHighlights()
 	for(int i = 0; i < GUITAR_STRINGS; i++) {
 		gFrets[i] = -1;
 	}
+
+	gdk_threads_add_idle(queueRedraw, NULL);
 }
 
 int populateContext(GUIContext *ctx, GtkBuilder *builder, AudioContext *audio)
@@ -315,6 +361,11 @@ int populateContext(GUIContext *ctx, GtkBuilder *builder, AudioContext *audio)
 	CHECK_WIDGET(gDrawArea, "guitar neck drawing area")
 
 	ctx->audio = audio;
+
+	// Until record doesn't start, keep this to 0
+	ctx->keepRecording = 0;
+
+	ctx->recordingThread = 0;
 
 	return 1;
 }
@@ -377,17 +428,13 @@ void windowClose()
 
 void recordClicked(GtkButton *button, gpointer contextPtr)
 {
-	static char recordingToggle = 0;
+	GUIContext *ctx = (GUIContext *) contextPtr;
 
-	if(recordingToggle) {
-		printf("Start recording.\n");
-		gtk_button_set_label(GTK_BUTTON(button), "gtk-media-stop");
+	if(ctx->keepRecording) {
+		stopRecording(ctx);
 	} else {
-		printf("Stop recording.\n");
-		gtk_button_set_label(GTK_BUTTON(button), "gtk-media-record");
+		startRecording(ctx);
 	}
-
-	recordingToggle = !recordingToggle;
 }
 
 void drawGuitar(GtkWidget *widget, cairo_t *cr, gpointer userData)
@@ -536,4 +583,48 @@ gboolean queueRedraw(gpointer userData)
 	}
 
 	return G_SOURCE_REMOVE;
+}
+
+void startRecording(GUIContext *ctx)
+{
+	const char *threadName = "RecordingThread";
+
+	if(ctx->recordingThread && ctx->keepRecording) {
+		// Very likely we're already recording
+		return;
+	}
+
+	ctx->keepRecording = 1;
+	g_thread_new(threadName, recordingWorker, ctx);
+
+	gtk_button_set_label(GTK_BUTTON(ctx->recordButton), "gtk-media-stop");
+}
+
+void stopRecording(GUIContext *ctx)
+{
+	ctx->keepRecording = 0;
+
+	if(ctx->recordingThread) {
+		g_thread_join(ctx->recordingThread);
+
+		/* From the documentation:
+		«Note that g_thread_join() implicitly unrefs the GThread as well.» */
+		ctx->recordingThread = 0;
+
+		ctx->recordingThread = 0;
+	}
+
+	gtk_button_set_label(GTK_BUTTON(ctx->recordButton), "gtk-media-record");
+	guiResetHighlights();
+}
+
+gpointer recordingWorker(gpointer contextPtr)
+{
+	GUIContext *ctx = (GUIContext *) contextPtr;
+
+	if(!audioRecord(ctx->audio, &ctx->keepRecording)) {
+		printf("Report error in some way to GUI!\n");
+	}
+
+	return NULL;
 }

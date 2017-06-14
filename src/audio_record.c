@@ -7,6 +7,8 @@
 
 #include "audio.h"
 
+#include "detect.h"
+
 /// printf, scanf, fprintf
 #include <stdio.h>
 /// malloc, free
@@ -70,40 +72,40 @@ static const int RING_BUFFER_DURATION = 30;
 /**
  * @brief The sleep time (in ms) between two executions of the acquiring loop.
  */
-static const int ACQUISITION_SLEEP = 10;
+static const int ACQUISITION_SLEEP = 50;
 
- /**
-  * @brief Struct to exchange data with recording function.
-  *
-  * LibSoundIo requires a callback function to save data from its buffer to some
-  * other memory area. This callback can handle a user parameter, and we use an
-  * instance of this struct as parameter.
-  *
-  * We use it to pass our output buffer and a variable which allows the control
-  * of the input acquisition cycle and the error reporting.
-  */
- typedef struct {
- 	/**
- 	 * @brief The buffer to save samples to.
- 	 *
- 	 * Instead of using a normal buffer, we use a circular buffer, as advised in
- 	 * libSoundIo documentation.
- 	 */
- 	struct SoundIoRingBuffer *ringBuffer;
+/**
+ * @brief Struct to exchange data with recording function.
+ *
+ * LibSoundIo requires a callback function to save data from its buffer to some
+ * other memory area. This callback can handle a user parameter, and we use an
+ * instance of this struct as parameter.
+ *
+ * We use it to pass our output buffer and a variable which allows the control
+ * of the input acquisition cycle and the error reporting.
+ */
+typedef struct {
+	/**
+	 * @brief The buffer to save samples to.
+	 *
+	 * Instead of using a normal buffer, we use a circular buffer, as advised in
+	 * libSoundIo documentation.
+	 */
+	struct SoundIoRingBuffer *ringBuffer;
 
- 	/**
- 	 * @brief A status variable that is used to report errors.
- 	 *
- 	 * This variable can assume these values:
- 	 *  0: no errors;
- 	 *  1: ring buffer overflow;
- 	 *  2: begin read error;
- 	 *  3: end read error.
- 	 *
- 	 * When status is not 0, the audioRecord loop stops.
- 	 */
- 	int status;
- } RecordContext;
+	/**
+	 * @brief A status variable that is used to report errors.
+	 *
+	 * This variable can assume these values:
+	 *  0: no errors;
+	 *  1: ring buffer overflow;
+	 *  2: begin read error;
+	 *  3: end read error.
+	 *
+	 * When status is not 0, the audioRecord loop stops.
+	 */
+	int status;
+} RecordContext;
 
 static struct SoundIoInStream *createStream(struct SoundIoDevice *device);
 static void readCallback(struct SoundIoInStream *instream, int frameCountMin,
@@ -112,8 +114,18 @@ static void sleepMs(unsigned int ms);
 
 int audioRecord(AudioContext *context, const char *keepRunning)
 {
-	/// An integer used to get errors and report false status when returning
+	/**
+	 * An integer used to get errors and report false status when returning.
+	 *
+	 * err != 0 will make skip all further blocks, except for the cleaning one.
+	 * In most cases, err is used instead of returing directly in order to make
+	 * sure that all resources are freed correctly.
+	 */
 	int err = 0;
+	/// A struct to exchange data with the recording callback
+	RecordContext rc;
+	/// The context for detection functions
+	DetectContext *detection = 0;
 
 	if(!context->device) {
 		return 0;
@@ -125,31 +137,31 @@ int audioRecord(AudioContext *context, const char *keepRunning)
 		return 0;
 	}
 
-	printf("%dHz %s interleaved\n", inStream->sample_rate,
-			soundio_format_string(inStream->format));
+	inStream->userdata = &rc;
+	rc.status = 0;
 
 	if(err = soundio_instream_open(inStream)) {
 		fprintf(stderr, "Could not open input stream: %s.\n",
 				soundio_strerror(err));
-		return 0;
 	}
 
-	int capacity = RING_BUFFER_DURATION * inStream->sample_rate *
-			inStream->bytes_per_frame;
+	if(!err) {
+		int capacity = RING_BUFFER_DURATION * inStream->sample_rate *
+				inStream->bytes_per_frame;
+		rc.ringBuffer = soundio_ring_buffer_create(context->soundio, capacity);
 
-	/// A struct to exchange data with the recording callback
-	RecordContext rc;
-	inStream->userdata = &rc;
-
-	rc.ringBuffer = soundio_ring_buffer_create(context->soundio, capacity);
-	if(!rc.ringBuffer) {
-		fprintf(stderr, "Could not create the ring buffer.\n");
-		return 0;
+		if(!rc.ringBuffer) {
+			fprintf(stderr, "Could not create the ring buffer.\n");
+			err = 1;
+		}
 	}
 
-	rc.status = 0;
+	if(!err) {
+		detection = detectInit(inStream->sample_rate);
+		err = detection == 0;
+	}
 
-	if((err = soundio_instream_start(inStream))) {
+	if(!err && (err = soundio_instream_start(inStream))) {
 		fprintf(stderr, "Could not start input device: %s.\n",
 				soundio_strerror(err));
 	}
@@ -159,24 +171,26 @@ int audioRecord(AudioContext *context, const char *keepRunning)
 	it is reported with an assertion in debugging time. */
 	assert(*keepRunning);
 
-	/* Check err because if error has already occurred the cycle is skipped and
-	cleaning code is immediately run instead.
-	TODO: Even though the cycle exits gracefully, sample loss is still a
-	problem! As a metter of fact keepRunning is evaluated without checking if
-	there are still samples to read. */
 	while(*keepRunning && !rc.status && !err) {
 		soundio_flush_events(context->soundio);
 		sleepMs(ACQUISITION_SLEEP);
 
-		int fillBytes = soundio_ring_buffer_fill_count(rc.ringBuffer);
-		char *readBuf = soundio_ring_buffer_read_ptr(rc.ringBuffer);
-		// TODO Do something with this buffer
-		soundio_ring_buffer_advance_read_ptr(rc.ringBuffer, fillBytes);
+		err = detectAnalyze(detection, rc.ringBuffer);
 	}
 
 	// Cleaning section
-	soundio_ring_buffer_destroy(rc.ringBuffer);
+	if(rc.ringBuffer) {
+		if(!err) {
+			// Be sure to analyze last data, too
+			err = detectAnalyze(detection, rc.ringBuffer);
+		}
+
+		// SoundIo documentation says nothing about cleaning a null ringBuffer.
+		soundio_ring_buffer_destroy(rc.ringBuffer);
+	}
 	soundio_instream_destroy(inStream);
+	// A null detection isn't a problem, so leave the check to detectFree
+	detectFree(detection);
 
 	return err == 0;
 }

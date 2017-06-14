@@ -24,13 +24,8 @@
 /// Macros to use check 0.10 with floating point numbers
 #include "check_float.h"
 
-/// noteToSemitones
+/// noteToSemitones, noteToFrequency
 #include "guitar.h"
-
-/**
- * @brief The frequency of A0 in Hz.
- */
-static const double A0 = 27.5;
 
 /**
  * @brief The timeout to run the "real world samples" test.
@@ -53,15 +48,6 @@ static const double SAMPLES_TIMEOUT = 60.0;
 static char *gPath;
 
 /**
- * @brief Compute a frequency starting from A0.
- *
- * @param semitones The semitones above A0 of the note we want to obtain
- *  frequency of
- * @return The frequency
- */
-inline static double getFrequency(semitone_t semitones);
-
-/**
  * @brief Open a sample file.
  *
  * @param filename The name of the file of the sample. The path will be
@@ -82,7 +68,7 @@ START_TEST(testPeriodEstimatorSine)
 	/**
 	 * @brief The base frequency for sine tests. In this case A4.
 	 */
-	double f = getFrequency(noteToSemitones("A", 4));
+	double f = noteToFrequency("A", 4);
 
 	ck_assert_double_eq_tol(f, 440.0, 1e-5);
 
@@ -93,16 +79,15 @@ START_TEST(testPeriodEstimatorSine)
 	const double pi = 4 * atan(1);
 
 	/// Lower bound for the frequency detection
-	int maxP = (int)floor(fs / A0);
+	int maxP = (int)floor(fs / noteToFrequency("A", 0));
 
 	/**
 	 * @brief Upper bound for frequency detection (max frequency = min period)
 	 *
 	 * This is E7, which is an octave above maximum note of a 24-frets guitar
 	 * in standard tuning.
-	 * E7 = 6 octaves + 7 semitones (E0 has lower frequency than A0).
 	 */
-	int minP = (int)ceil(fs / getFrequency(7 * 12 + 7));
+	int minP = (int)ceil(fs / noteToFrequency("E", 7));
 
 	/**
 	 * @brief The length of the buffer where the sine signal will be created.
@@ -177,14 +162,14 @@ START_TEST(testPeriodEstimatorSamples)
 	};
 
 	/// The max period (minimum frequency) that we want to be able to detect
-	int maxPeriod = (int) ceil(44100 / getFrequency(noteToSemitones("A", 0)));
+	int maxPeriod = (int) ceil(44100 / noteToFrequency("A", 0));
 	/**
 	 * The min period (maximum frequency) that we want to be able to detect.
 	 *
 	 * E7 is a good period because it's an octave above the maximum note that
 	 * can be made in a standard-tuned 24-frets guitar.
 	 */
-	int minPeriod = (int) floor(44100 / getFrequency(noteToSemitones("E", 7)));
+	int minPeriod = (int) floor(44100 / noteToFrequency("E", 7));
 
 	for(int i = 0; strlen(samples[i]); i++) {
 		size_t size;
@@ -255,11 +240,6 @@ int main(int argc, char *argv[])
 	number_failed = srunner_ntests_failed(sr);
 	srunner_free(sr);
 	return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
-}
-
-inline static double getFrequency(semitone_t semitones)
-{
-	return A0 * pow(2, semitones / 12.0f);
 }
 
 static float *openSample(const char *filename, size_t *size)

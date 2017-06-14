@@ -19,7 +19,7 @@ include_directories(include)
 add_subdirectory(tests)
 
 add_executable(Progetto src/main.c src/audio_init.c src/audio_record.c
-		src/gui.c src/guitar.c src/period_estimator.c)
+		src/detect.c src/gui.c src/guitar.c src/period_estimator.c)
 target_link_libraries(Progetto m soundio Threads::Threads ${GTK3_LIBRARIES}
 		${RSVG_LIBRARIES} ${CAIRO_LIBRARIES})
 

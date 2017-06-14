@@ -22,19 +22,25 @@
 START_TEST(testGuitarSemitones)
 {
 	/// Note names
-	char *notes[] = {"C", "C#", "Db", "D", "D#", "Eb", "E", "F",
-			"F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"};
+	char *notes[] = {"C", "C#", "Db", "D", "D#", "Eb",
+			"E", "F", "F#", "Gb", "G", "G#", "Ab", "A",
+			"A#", "Bb", "B"};
 
 	/**
 	 * Hard-coded semitones values for notes of previous array at octave 0 from
 	 * A0.
 	 */
-	semitone_t semitones[] = {-9, -8, -8, -7, -6, -6, -5, -4,
-			-3, -3, -2, -1, -1, 0, 1, 1, 2};
+	semitone_t semitones[] = {-9, -8, -8, -7, -6, -6,
+			-5, -4, -3, -3, -2, -1, -1, 0,
+			1, 1, 2};
 
-	/// Hard-coded frequencies for notes of previous array at octave 0 in Hz
-	double freqs[] = {16.35, 17.32, 17.32, 18.35, 19.45, 19.45, 20.60, 21.83,
-			23.12, 23.12, 24.50, 25.96, 25.96, 27.50, 29.14, 29.14, 30.87};
+	/**
+	 * Hard-coded frequencies for notes of previous array at octave 0 in Hz
+	 * @link https://en.wikipedia.org/wiki/Piano_key_frequencies
+	 */
+	double freqs[] = {16.3516, 17.3239, 17.3239, 18.354, 19.4454, 19.4454,
+			20.6017, 21.8268, 23.1247, 23.1247, 24.4997, 25.9565, 25.9565, 27.5,
+			29.1352, 29.1352, 30.8677};
 
 	/// The maximum octave to check
 	const semitone_t maxOctave = 10;
@@ -43,7 +49,7 @@ START_TEST(testGuitarSemitones)
 	 * The epsilon to accept the frequency error.
 	 * Since the values came with 2 significant figures, keep 0.01 as epsilon.
 	 */
-	const double epsilon = 1e-2;
+	const double epsilon = 1e-5;
 
 	size_t len = sizeof(freqs) / sizeof(*freqs);
 
@@ -57,10 +63,19 @@ START_TEST(testGuitarSemitones)
 			ck_assert_int_eq(fromFrequency, semitones[i]);
 			ck_assert_double_eq_tol(error, 1, epsilon);
 
+			error = noteToFrequency(notes[i], octave) / freqs[i];
+			ck_assert_double_eq_tol(error, 1, epsilon);
+
 			semitones[i] += 12;
 			freqs[i] *= 2;
 		}
 	}
+
+	// Some failure tests
+	ck_assert_int_eq(noteToSemitones("Z", 5), INVALID_SEMITONE);
+	ck_assert_int_eq(frequencyToSemitones(-5, 0), INVALID_SEMITONE);
+	ck_assert_int_eq(frequencyToSemitones(0.0, 0), INVALID_SEMITONE);
+	ck_assert_double_eq(noteToFrequency("X", 2), -1.0);
 }
 END_TEST
 
@@ -97,6 +112,9 @@ START_TEST(testGuitarFrets)
 		noteToSemitones("G", 4),
 		noteToSemitones("A", 4),
 		noteToSemitones("C", 5),
+
+		// No valid frets
+		STANDARD_TUNING[5] - 2,
 	};
 
 	semitone_t expected[][/*GUITAR_STRINGS*/6] = {
@@ -115,6 +133,8 @@ START_TEST(testGuitarFrets)
 		{3, 8, 12, 17, 22, -1},
 		{5, 10, 14, 19, -1, -1},
 		{8, 13, 17, 22, -1, -1},
+
+		{-1, -1, -1, -1, -1, -1},
 	};
 
 	size_t numTests = sizeof(tests) / sizeof(*tests);
@@ -141,7 +161,8 @@ Suite *guitarSuite(void)
 
 	s = suite_create("Guitar");
 
- 	tcSemitones = tcase_create("noteToSemitones and frequencyToSemitones");
+ 	tcSemitones = tcase_create("noteToSemitones, frequencyToSemitones and "
+			"noteToFrequency");
 	tcase_add_test(tcSemitones, testGuitarSemitones);
 	suite_add_tcase(s, tcSemitones);
 

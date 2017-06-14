@@ -42,7 +42,7 @@ typedef short semitone_t;
 /**
  * @brief A constant used to tell that the semitone is not valid.
  */
-#define INVALID_SEMITONE SHRT_MIN;
+#define INVALID_SEMITONE SHRT_MIN
 
 /**
  * @brief The number of string in a standard guitar.
@@ -76,6 +76,18 @@ extern const semitone_t STANDARD_TUNING[GUITAR_STRINGS];
  *  illegal arguments
  */
 extern semitone_t noteToSemitones(const char *name, semitone_t octave);
+
+/**
+ * @brief Get the frequency of note from its name
+ * @note noteToSemitones will be used to perform an initial conversion to
+ *  semitones, then they will be converted to the frequency
+ * @sa noteToSemitones
+ *
+ * @param name The name of the note.
+ * @param octave The octave of the note
+ * @return The frequency of the note, or -1 in case of error
+ */
+extern double noteToFrequency(const char *name, semitone_t octave);
 
 /**
  * @brief Convert a note frequency to semitones relative to A0.

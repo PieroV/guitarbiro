@@ -33,7 +33,7 @@
 /// fprintf
 #include <stdio.h>
 
-/// sqrt
+/// sqrt, isnan
 #include <math.h>
 
 /// assert
@@ -213,6 +213,18 @@ static void computeNac(const float *x, int n, int minP, int maxP, double *nac)
 
 static int findPeak(const double *nac, int minP, int maxP, double *period)
 {
+	/**
+	 * @brief The maximum relative error to accept the frequency interpolation.
+	 *
+	 * Once the peak is found, there's a linear interpolation between the peak
+	 * and the previous and following values of autocorrelation.
+	 *
+	 * However if these three values are too near, the shift explodes, and
+	 * during tests this lead to negative frequencies in some cases!
+	 * So if the shift value is too high, we just ignore it.
+	 */
+	const double shiftMaxError = 0.2;
+
 	/// The return value
 	int best = minP;
 
@@ -238,12 +250,31 @@ static int findPeak(const double *nac, int minP, int maxP, double *period)
 	double left  = nac[best - 1];
 	double right = nac[best + 1];
 
-	if(2 * mid - left - right != 0.0f) {
+	*period = best;
+
+	if(2 * mid - left - right != 0.0) {
 		double shift = 0.5 * (right - left) / ( 2 * mid - left - right );
-		*period = best + shift;
-	} else {
-		// mid == (left + right) / 2 => no shift required
-		*period = best;
+
+		if(fabs(shift) < shiftMaxError * best) {
+			*period = best + shift;
+		}
+	}
+	/* else mid == (left + right) / 2 => no shift required and "best" is already
+	the best period. */
+
+	/*
+	 * Some ill formed signals can contain NaN values.
+	 * This could happen, on guitar signals, when cables are defective and they
+	 * produce high power noises, or when mechanical switches (pickup selector,
+	 * volume potentiometer...) are used.
+	 *
+	 * During tests we encountered some situations of this kind, and a peak was
+	 * found correctly, but since the signal is corrupted, we prefer returning
+	 * an error.
+	 */
+	if(isnan(*period)) {
+		*period = 0.0;
+		return -1;
 	}
 
 	return best;
