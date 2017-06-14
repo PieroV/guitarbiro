@@ -127,6 +127,19 @@ extern const char *audioGetCurrentDevice(AudioContext *context);
 extern int audioSetBackend(AudioContext *context, const char *backend);
 
 /**
+ * @brief Change input device.
+ *
+ * @note This function won't check if audioRecord is running, the caller has to
+ *  check it before calling this function. An undefined behaviour might happen
+ *  otherwise.
+ *
+ * @param context The AudioContext instance
+ * @param name The name of the device to use
+ * @return 1 in case of success, 0 in case of error
+ */
+extern int audioSetDevice(AudioContext *context, const char *name);
+
+/**
  * @brief Start recording.
  *
  * For this test code, it will acquire some samples from the selected device

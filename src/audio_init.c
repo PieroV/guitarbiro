@@ -19,7 +19,7 @@
  * @param index The index of the device in the internal SoundIo list
  * @return The pointer to the device struct, or NULL in case of error
  */
-static struct SoundIoDevice *getInputDevice(struct SoundIo *soundio, int index);
+static int setupInputDevice(struct SoundIoDevice *device);
 
 AudioContext *audioInit()
 {
@@ -48,7 +48,12 @@ AudioContext *audioInit()
 	// We need device information in order to open the default device
 	soundio_flush_events(context->soundio);
 	int defaultDevice = soundio_default_input_device_index(context->soundio);
-	context->device = getInputDevice(context->soundio, defaultDevice);
+	context->device = soundio_get_input_device(context->soundio, defaultDevice);
+
+	if(!setupInputDevice(context->device)) {
+		soundio_device_unref(context->device);
+		context->device = 0;
+	}
 
 	/* Don't block the program in case of failure while opening the default
 	device, so that it can be changed using the settings dialog. */
@@ -209,6 +214,40 @@ const char *audioGetCurrentDevice(AudioContext *context)
 	return context->device->name;
 }
 
+int audioSetDevice(AudioContext *context, const char *name)
+{
+	if(!context || !context->soundio || !name) {
+		return 0;
+	}
+
+	if(context->device && !strcmp(context->device->name, name)) {
+		return 1;
+	}
+
+	if(context->device) {
+		soundio_device_unref(context->device);
+		context->device = 0;
+	}
+
+	soundio_flush_events(context->soundio);
+
+	int count = soundio_input_device_count(context->soundio);
+	for(int i = 0; i < count && !context->device; i++) {
+		context->device = soundio_get_input_device(context->soundio, i);
+		if(strcmp(context->device->name, name)) {
+			soundio_device_unref(context->device);
+			context->device = 0;
+		}
+	}
+
+	if(context->device && !setupInputDevice(context->device)) {
+		soundio_device_unref(context->device);
+		context->device = 0;
+	}
+
+	return context->device != 0;
+}
+
 void audioClose(AudioContext *context)
 {
 	if(context->device) {
@@ -224,24 +263,20 @@ void audioClose(AudioContext *context)
 	free(context);
 }
 
-struct SoundIoDevice *getInputDevice(struct SoundIo *soundio, int index)
+int setupInputDevice(struct SoundIoDevice *device)
 {
-	struct SoundIoDevice *device = soundio_get_input_device(soundio, index);
-
 	if(device->probe_error) {
 		fprintf(stderr, "Unable to probe device: %s.\n",
 				soundio_strerror(device->probe_error));
-		soundio_device_unref(device);
-		device = 0;
+		return 0;
 	}
 
 	struct SoundIoChannelLayout const *mono =
 			soundio_channel_layout_get_default(1);
 	if(!soundio_device_supports_layout(device, mono)) {
 		fprintf(stderr, "The selected device does not support mono layout.\n");
-		soundio_device_unref(device);
-		device = 0;
+		return 0;
 	}
 
-	return device;
+	return 1;
 }

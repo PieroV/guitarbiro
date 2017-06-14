@@ -493,11 +493,44 @@ void menuShowSettings(GtkMenuItem *menuItem, gpointer settingsWindow)
 
 void settingsApply(GtkButton *button, gpointer contextPtr)
 {
+	/// The GUIContext instance
 	GUIContext *ctx = (GUIContext *) contextPtr;
+	/// The newly chosen backend
+	gchar *backend;
+	/// The newly chosen input device
+	gchar *device;
 
-	printf("Doing something to apply settings...\n");
-	printf("Backend: %s\n", gtk_combo_box_text_get_active_text(ctx->backendList));
-	printf("Device: %s\n", gtk_combo_box_text_get_active_text(ctx->deviceList));
+	char wasRecording = ctx->keepRecording;
+
+	if(wasRecording) {
+		stopRecording(ctx);
+	}
+
+	backend = gtk_combo_box_text_get_active_text(ctx->backendList);
+	device = gtk_combo_box_text_get_active_text(ctx->deviceList);
+
+	if(!audioSetBackend(ctx->audio, backend) &&
+			audioSetDevice(ctx->audio, device)) {
+		// In case it has been disabled...
+		gtk_widget_set_sensitive(ctx->recordButton, TRUE);
+	} else {
+		gtk_widget_set_sensitive(ctx->recordButton, FALSE);
+
+		GtkWidget *dialog = gtk_message_dialog_new(
+				GTK_WINDOW(ctx->settingsWindow), GTK_DIALOG_DESTROY_WITH_PARENT,
+				GTK_MESSAGE_ERROR, GTK_BUTTONS_OK, "An error occurred while "
+				"trying to apply these settings. Please check them again.");
+		gtk_dialog_run(GTK_DIALOG(dialog));
+		// The dialog is blocking
+		gtk_widget_destroy(dialog);
+
+		// Prevent the dialog from closing
+		return;
+	}
+
+	if(wasRecording) {
+		startRecording(ctx);
+	}
 
 	gtk_widget_hide(ctx->settingsWindow);
 }

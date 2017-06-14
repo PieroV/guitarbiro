@@ -72,7 +72,7 @@ static const int RING_BUFFER_DURATION = 30;
 /**
  * @brief The sleep time (in ms) between two executions of the acquiring loop.
  */
-static const int ACQUISITION_SLEEP = 50;
+static const int ACQUISITION_SLEEP = 20;
 
 /**
  * @brief Struct to exchange data with recording function.
@@ -178,6 +178,11 @@ int audioRecord(AudioContext *context, const char *keepRunning)
 		err = detectAnalyze(detection, rc.ringBuffer);
 	}
 
+	/* Pause the stream so that readingCallback won't be called anymore and
+	won't cause troubles, now that the ring buffer will be destroyed. */
+	soundio_instream_pause(inStream, 1);
+	soundio_instream_destroy(inStream);
+
 	// Cleaning section
 	if(rc.ringBuffer) {
 		if(!err) {
@@ -188,7 +193,7 @@ int audioRecord(AudioContext *context, const char *keepRunning)
 		// SoundIo documentation says nothing about cleaning a null ringBuffer.
 		soundio_ring_buffer_destroy(rc.ringBuffer);
 	}
-	soundio_instream_destroy(inStream);
+
 	// A null detection isn't a problem, so leave the check to detectFree
 	detectFree(detection);
 
