@@ -27,9 +27,13 @@
  * @param Maximum period of interest
  * @param q Quality of the periodicity (1 = perfectly periodic). This parameter
  *  cannot be null and must be correctly allocated
+ * @param periodInt Output parameter that if not null will have contain the
+ *  period of the signal, obtained from the normalized autocorrelation without
+ *  any interpolation or fix (as the octaves one!). If null it will be ignored
  * @return The period of signal (in number of elements of x array)
  */
-double estimatePeriod(const float *x, int n, int minP, int maxP, double *q);
+double estimatePeriod(const float *x, int n, int minP, int maxP, double *q,
+		int *periodInt);
 
 /**
  * @brief Free the buffer used by estimatePeriod.

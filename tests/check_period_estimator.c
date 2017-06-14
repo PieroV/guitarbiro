@@ -112,7 +112,7 @@ START_TEST(testPeriodEstimatorSine)
 	}
 
 	double q;
-	double estimated = estimatePeriod(x, len, minP, maxP, &q);
+	double estimated = estimatePeriod(x, len, minP, maxP, &q, NULL);
 
 	ck_assert_double_neq(estimated, 0);
 	estimated = fs / estimated;
@@ -121,7 +121,7 @@ START_TEST(testPeriodEstimatorSine)
 	ck_assert_double_eq_tol(estimated, f, 0.001);
 	ck_assert_double_eq_tol(q, 1, 0.05);
 
-	estimated = estimatePeriod(y, len, minP, maxP, &q);
+	estimated = estimatePeriod(y, len, minP, maxP, &q, NULL);
 	ck_assert_double_neq(estimated, 0);
 	estimated = fs / estimated;
 	ck_assert_double_eq_tol(estimated, f, 0.001);
@@ -179,7 +179,8 @@ START_TEST(testPeriodEstimatorSamples)
 		// openSample already checks for errors, so don't check again
 		float *buf = openSample(samples[i], &size);
 
-		freq = rate / estimatePeriod(buf, size, minPeriod, maxPeriod, &quality);
+		freq = rate / estimatePeriod(buf, size, minPeriod, maxPeriod, &quality,
+				NULL);
 		ck_assert_int_eq(frequencyToSemitones(freq, 0), expected[i]);
 
 		free(buf);

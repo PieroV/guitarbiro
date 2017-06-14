@@ -18,6 +18,9 @@
 /// assert
 #include <assert.h>
 
+/// Endianness test done by SoundIo
+#include <soundio/endian.h>
+
 #ifdef WIN32
 	/// Sleep
 #	include <windows.h>
@@ -52,15 +55,17 @@ static const int SAMPLE_RATES[] = {
 /**
  * @brief The formats we accept from the sound card.
  *
- * Probably the frequency algorithm will need float data, since we cannot make
- * a template in C. So we will accept only this format of data, in little endian
- * or bit endian.
- *
- * @todo Check description when we will have the algorithm
+ * Probably the frequency algorithm needs float data, and since we cannot make
+ * a template in C, we will accept only this format of data, in native
+ * endianness.
  */
 static const enum SoundIoFormat FORMATS[] = {
+#ifdef SOUNDIO_OS_LITTLE_ENDIAN
 	SoundIoFormatFloat32LE,
+#endif
+#ifdef SOUNDIO_OS_BIG_ENDIAN
 	SoundIoFormatFloat32BE,
+#endif
 	SoundIoFormatInvalid,
 };
 

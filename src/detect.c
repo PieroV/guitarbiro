@@ -201,6 +201,8 @@ int detectAnalyze(DetectContext *context, struct SoundIoRingBuffer *buffer)
 	double period;
 	/// The periodicity quality
 	double quality;
+	/// The period as integer
+	int intPeriod;
 
 	availableBytes = soundio_ring_buffer_fill_count(buffer);
 	available = availableBytes / sizeof(float);
@@ -219,14 +221,11 @@ int detectAnalyze(DetectContext *context, struct SoundIoRingBuffer *buffer)
 
 	buf = (float *) soundio_ring_buffer_read_ptr(buffer);
 	period = estimatePeriod(buf, available, context->minPeriod,
-			context->maxPeriod, &quality);
+			context->maxPeriod, &quality, &intPeriod);
 
 	// First filter: skip signals with negative period and low periodicity
-	// FIXME: period > 0.5 is temporary, in order to avoid ronud to 0 of intPeriod
-	if(isfinite(period) && period > 0.5 && quality >= MINIMUM_QUALITY) {
+	if(isfinite(period) && periodInt > 0 && quality >= MINIMUM_QUALITY) {
 		double freq = context->rate / period;
-		/// @todo Get period directly from estimatePeriod
-		int intPeriod = (int) round(period);
 		analyzeFiltered(context, buf, available, freq, intPeriod);
 	} else {
 		context->droppedSamples += available;
@@ -247,6 +246,7 @@ void analyzeFiltered(DetectContext *context, float *buf, int size, double freq,
 	assert(size > 0);
 	assert(freq > 0);
 	assert(period > 0);
+	assert(periodInt > 0);
 
 	/// The array to store in which frets the note can be played
 	semitone_t frets[GUITAR_STRINGS];

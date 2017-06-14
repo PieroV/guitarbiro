@@ -111,7 +111,8 @@ static int findPeak(const double *nac, int minP, int maxP, double *period);
  */
 static double fixOctaves(const double *nac, int minP, double period, int maxNac);
 
-double estimatePeriod(const float *x, int n, int minP, int maxP, double *q)
+double estimatePeriod(const float *x, int n, int minP, int maxP, double *q,
+		int *periodInt)
 {
 	assert(minP > 1);
 	assert(maxP > minP);
@@ -154,6 +155,10 @@ double estimatePeriod(const float *x, int n, int minP, int maxP, double *q)
 	/* "Quality" of periodicity is the normalized autocorrelation at the best
 	period (which may be a multiple of the actual period). */
 	*q = nac[maxNac];
+
+	if(periodInt) {
+		*periodInt = maxNac;
+	}
 
 	period = fixOctaves(nac, minP, period, maxNac);
 
