@@ -5,11 +5,11 @@
 
 #include "audio.h"
 
-/// printf, scanf, fprintf
+// printf, scanf, fprintf
 #include <stdio.h>
-/// malloc, free
+// malloc, free
 #include <stdlib.h>
-/// strlen
+// strlen
 #include <string.h>
 
 /**

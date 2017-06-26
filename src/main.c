@@ -8,8 +8,9 @@
 
 #include "audio.h"
 #include "gui.h"
+#include "period_estimator.h"
 
-/// fprintf
+// fprintf
 #include <stdio.h>
 
 #include <gtk/gtk.h>

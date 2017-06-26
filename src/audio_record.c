@@ -9,28 +9,28 @@
 
 #include "detect.h"
 
-/// printf, scanf, fprintf
+// printf, scanf, fprintf
 #include <stdio.h>
-/// malloc, free
+// malloc, free
 #include <stdlib.h>
-/// memset, memcpy
+// memset, memcpy
 #include <string.h>
-/// assert
+// assert
 #include <assert.h>
 
-/// Endianness test done by SoundIo
+// Endianness test done by SoundIo
 #include <soundio/endian.h>
 
 #ifdef WIN32
-	/// Sleep
+	// Sleep
 #	include <windows.h>
 #elif defined(__linux__)
-	/// usleep (on Linux)
+	// usleep (on Linux)
 #	include <unistd.h>
 #endif
 
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
-	/// nanosleep
+	// nanosleep
 #	include <time.h>
 #endif
 

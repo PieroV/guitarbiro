@@ -5,7 +5,7 @@
 
 #include "guitar.h"
 
-/// log2, roundf, pow
+// log2, roundf, pow
 #include <math.h>
 
 #include <stdio.h>

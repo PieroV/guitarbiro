@@ -6,7 +6,7 @@
 #ifndef __AUDIO_H
 #define __AUDIO_H
 
-/// size_t
+// size_t
 #include <stddef.h>
 
 #include <soundio/soundio.h>
@@ -152,7 +152,7 @@ extern int audioSetDevice(AudioContext *context, const char *name);
  * The flag has been chosen to be const to avoid any problem with
  * synchronization.
  *
- * @param outFileName The name of the file to save audio to
+ * @param context The AudioContext instance
  * @param keepRunning A flag that allows to control the audio recording
  * @return The status (boolean)
  */

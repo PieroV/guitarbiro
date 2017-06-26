@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 
-# TODO: Cambiare nome quando lo avrò deciso
-project(Progetto VERSION 1.0 LANGUAGES C)
+project(GuitarBiro VERSION 1.0 LANGUAGES C)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
@@ -18,9 +17,9 @@ add_definitions(${GTK3_CFLAGS_OTHER})
 include_directories(include)
 add_subdirectory(tests)
 
-add_executable(Progetto src/main.c src/audio_init.c src/audio_record.c
+add_executable(guitarbiro src/main.c src/audio_init.c src/audio_record.c
 		src/detect.c src/gui.c src/guitar.c src/period_estimator.c)
-target_link_libraries(Progetto m soundio Threads::Threads ${GTK3_LIBRARIES}
+target_link_libraries(guitarbiro m soundio Threads::Threads ${GTK3_LIBRARIES}
 		${RSVG_LIBRARIES} ${CAIRO_LIBRARIES})
 
 enable_testing()

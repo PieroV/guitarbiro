@@ -1,15 +1,20 @@
+/**
+ * @file gui.c
+ * @brief Manages graphical user interfaces
+ */
+
 #include "gui.h"
 
-/// fprintf, snprintf
+// fprintf, snprintf
 #include <stdio.h>
-/// malloc, free
+// malloc, free
 #include <stdlib.h>
 
-/// All the needed GTK functions
+// All the needed GTK functions
 #include <gtk/gtk.h>
-/// API to render SVG images, used to draw the guitar neck
+// API to render SVG images, used to draw the guitar neck
 #include <librsvg/rsvg.h>
-/// Portable threading API
+// Portable threading API
 #include <glib.h>
 
 /**

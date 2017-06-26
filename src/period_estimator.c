@@ -27,16 +27,16 @@
  THE SOFTWARE.
  */
 
-/// free, malloc, realloc
+// free, malloc, realloc
 #include <stdlib.h>
 
-/// fprintf
+// fprintf
 #include <stdio.h>
 
-/// sqrt, isnan
+// sqrt, isnan
 #include <math.h>
 
-/// assert
+// assert
 #include <assert.h>
 
 /**

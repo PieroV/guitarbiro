@@ -3,7 +3,7 @@
  * @brief Detect which note has been played in a sequency of audio samples.
  */
 
-/// SoundIoRingBuffer
+// SoundIoRingBuffer
 #include <soundio/soundio.h>
 
 /**

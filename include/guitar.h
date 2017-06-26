@@ -23,7 +23,7 @@
 #ifndef __GUITAR_H
 #define __GUITAR_H
 
-/// SHRT_MIN
+// SHRT_MIN
 #include <limits.h>
 
 /**

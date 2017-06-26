@@ -3,10 +3,10 @@
  * @brief Provides some macros to use floating point numbers with check 0.10.
  */
 
-/// The check unit framework
+// The check unit framework
 #include <check.h>
 
-/// fabs
+// fabs
 #include <math.h>
 
 #ifndef ck_assert_float_eq_tol

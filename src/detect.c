@@ -5,25 +5,25 @@
 
 #include "detect.h"
 
-/// semitone_t, noteToFrequency, GUITAR_STRINGS
+// semitone_t, noteToFrequency, GUITAR_STRINGS
 #include "guitar.h"
 
-/// estimatePeriod
+// estimatePeriod
 #include "period_estimator.h"
 
-/// malloc, free
+// malloc, free
 #include <stdlib.h>
 
-/// floor, ceil, isfinite
+// floor, ceil, isfinite
 #include <math.h>
 
-/// assert
+// assert
 #include <assert.h>
 
-/// printf
+// printf
 #include <stdio.h>
 
-/// guiHighlightFrets, guiResetHighlights
+// guiHighlightFrets, guiResetHighlights
 #include "gui.h"
 
 /**
